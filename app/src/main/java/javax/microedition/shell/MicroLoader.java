@@ -21,6 +21,7 @@ import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.Environment;
 import android.os.StrictMode;
@@ -29,6 +30,7 @@ import android.util.SparseIntArray;
 import android.view.KeyEvent;
 
 import androidx.core.content.ContextCompat;
+import androidx.preference.PreferenceManager;
 
 import org.acra.ACRA;
 import org.acra.ErrorReporter;
@@ -237,9 +239,11 @@ public class MicroLoader {
 	void applyConfiguration() {
 		try {
 			// Apply configuration to the launching MIDlet
-			if (params.showKeyboard) {
+			if (params.showKeyboard && !hardwareKeyboardReplacesVk()) {
 				ContextHolder.setVk(new VirtualKeyboard(params));
 			} else {
+				// Everything that draws or edits the overlay checks for null first, so
+				// clearing it here is all that is needed to take the controls away.
 				ContextHolder.setVk(null);
 			}
 			setProperties();
@@ -283,6 +287,25 @@ public class MicroLoader {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	/**
+	 * Whether the on-screen controls should give way to a physical keyboard.
+	 *
+	 * <p>On a device with real keys the overlay is redundant, and it covers part of a screen
+	 * that is usually small to begin with. The preference exists for the other case: an
+	 * external keyboard that is connected but not always within reach.
+	 */
+	private boolean hardwareKeyboardReplacesVk() {
+		SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+		if (!preferences.getBoolean(Constants.PREF_HIDE_VK_HW_KEYBOARD, true)) {
+			return false;
+		}
+		boolean hasKeyboard = KeyMapper.hasHardwareKeyboard(context);
+		if (hasKeyboard) {
+			Log.i(TAG, "Hardware keyboard detected: hiding the on-screen controls");
+		}
+		return hasKeyboard;
 	}
 
 	void takeScreenshot(Canvas canvas, SingleObserver<String> observer) {

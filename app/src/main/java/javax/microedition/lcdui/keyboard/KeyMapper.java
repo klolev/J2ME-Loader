@@ -17,6 +17,8 @@
 
 package javax.microedition.lcdui.keyboard;
 
+import android.content.Context;
+import android.content.res.Configuration;
 import android.util.SparseIntArray;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
@@ -91,6 +93,18 @@ public class KeyMapper {
 		mapGameAction(GAME_B, KEY_NUM9);
 		mapGameAction(GAME_C, KEY_STAR);
 		mapGameAction(GAME_D, KEY_POUND);
+	}
+
+	/**
+	 * Whether the device has a physical keyboard the user can type on right now.
+	 *
+	 * <p>Both halves of the check matter: a slider phone still reports its keyboard while it
+	 * is closed, and then the on-screen keys are the only ones the user has.
+	 */
+	public static boolean hasHardwareKeyboard(Context context) {
+		Configuration config = context.getResources().getConfiguration();
+		return config.keyboard != Configuration.KEYBOARD_NOKEYS
+				&& config.hardKeyboardHidden != Configuration.HARDKEYBOARDHIDDEN_YES;
 	}
 
 	private static void remapKeys() {
