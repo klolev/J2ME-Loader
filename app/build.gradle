@@ -1,7 +1,14 @@
+import ru.woesss.j2me.gradle.MidletImporter
+
 plugins {
     id 'com.android.application'
 }
 
+// Resolves -Pmidlet=<suite> into everything the 'midlet' flavor needs; null without it.
+apply from: 'midlet-import.gradle'
+
+def midletImport = project.ext.midletImport
+def releaseSigning = resolveReleaseSigning()
 def midletArchivesBaseName
 
 android {
@@ -21,19 +28,12 @@ android {
     }
 
     signingConfigs {
-        release {
-            if (System.getenv()['BITRISE_IO']) {
-                keyAlias System.getenv('BITRISEIO_ANDROID_KEYSTORE_ALIAS')
-                keyPassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PRIVATE_KEY_PASSWORD')
-                storeFile rootProject.file(System.getenv('BITRISEIO_ANDROID_KEYSTORE_NAME'))
-                storePassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PASSWORD')
-            } else {
-                Properties keystoreProps = new Properties()
-                keystoreProps.load(new FileInputStream(rootProject.file("keystore.properties")))
-                keyAlias keystoreProps['keyAlias']
-                keyPassword keystoreProps['keyPassword']
-                storeFile file(keystoreProps['storeFile'])
-                storePassword keystoreProps['storePassword']
+        if (releaseSigning != null) {
+            release {
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+                storeFile releaseSigning.storeFile
+                storePassword releaseSigning.storePassword
             }
         }
     }
@@ -42,7 +42,9 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            signingConfig signingConfigs.release
+            if (releaseSigning != null) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             applicationIdSuffix '.debug'
@@ -81,20 +83,65 @@ android {
                     'proguard-rules.pro', 'proguard-common.pro'
             versionNameSuffix "-dev-" + generateVersionCode()
         }
-        // variant dimension for create android port from J2ME app source
+        // variant dimension for an android port of a single J2ME app: either an already
+        // compiled suite passed as -Pmidlet=<jar|jad>, or J2ME sources under 'app/src/midlet'
         midlet {
             buildConfigField 'boolean', 'FULL_EMULATOR', 'false'
-            // configure midlet's port project params here, as default it read from app manifest,
-            // placed to 'app/src/midlet/resources/MIDLET-META-INF/MANIFEST.MF'
-            def props = getMidletManifestProperties()
-            def midletName = props.getValue('MIDlet-Name').trim()
-            def apkName = midletName.replaceAll('[/\\\\:*?\"<>|]', '').replace(' ', '_')
-            applicationId "com.example.androidlet.${apkName.toLowerCase()}"
-            versionName = props.getValue('MIDlet-Version')
-            resValue 'string', 'app_name', midletName
-            midletArchivesBaseName = apkName
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-midlet.pro', 'proguard-common.pro'
+            def midletName
+            if (midletImport != null) {
+                midletName = midletImport.appName
+                applicationId midletImport.applicationId
+                versionCode midletImport.versionCode
+                versionName midletImport.versionName
+                midletArchivesBaseName = midletImport.archiveName
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                        'proguard-midlet.pro', 'proguard-common.pro', midletImport.proguardFile
+            } else {
+                // configure midlet's port project params here, as default it read from app manifest,
+                // placed to 'app/src/midlet/resources/MIDLET-META-INF/MANIFEST.MF'
+                def props = getMidletManifestProperties()
+                midletName = props.getValue('MIDlet-Name').trim()
+                def apkName = midletName.replaceAll('[/\\\\:*?\"<>|]', '').replace(' ', '_')
+                applicationId "com.example.androidlet.${apkName.toLowerCase()}"
+                versionName = props.getValue('MIDlet-Version')
+                midletArchivesBaseName = apkName
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                        'proguard-midlet.pro', 'proguard-common.pro'
+            }
+            // A suite name is free text, so it can't go into a resource unescaped.
+            resValue 'string', 'app_name', MidletImporter.escapeStringResource(midletName)
+        }
+    }
+
+    sourceSets {
+        if (midletImport != null) {
+            // The imported suite brings its own classes, resources and descriptor in one jar,
+            // so the sample port sources - and above all the sample's MANIFEST.MF - must not
+            // be packaged alongside it.
+            midlet.java.srcDirs = []
+            midlet.resources.srcDirs = []
+            if (midletImport.resDir != null) {
+                midlet.res.srcDirs += midletImport.resDir
+            }
+        }
+    }
+
+    if (midletImport != null) {
+        packaging {
+            resources {
+                // A suite keeps its data files at the root of its jar under whatever names it
+                // chose, and AGP's stock exclusions - '/*.txt', '/LICENSE' and the like -
+                // would drop them without a word. Reclaim only the patterns that actually
+                // cover a file of this suite, so the rest of the list keeps doing its job,
+                // and let a name shared with a library resolve instead of failing the build.
+                def reclaimed = MidletImporter.resourcePatternsInUse(excludes, midletImport.resourcePaths)
+                if (!reclaimed.isEmpty()) {
+                    logger.lifecycle("MIDlet: keeping suite files normally excluded from packaging: "
+                            + reclaimed.join(', '))
+                    excludes.removeAll(reclaimed)
+                    pickFirsts.addAll(reclaimed)
+                }
+            }
         }
     }
 
@@ -137,6 +184,34 @@ static def generateVersionCode() {
     return result.toInteger()
 }
 
+/**
+ * Release signing credentials: the CI keystore, then the developer's keystore.properties,
+ * then - only when exporting a MIDlet - a generated key, so that the exported APK is
+ * installable rather than merely built. Null when none of those is available.
+ */
+Map<String, Object> resolveReleaseSigning() {
+    if (System.getenv()['BITRISE_IO']) {
+        return [keyAlias    : System.getenv('BITRISEIO_ANDROID_KEYSTORE_ALIAS'),
+                keyPassword : System.getenv('BITRISEIO_ANDROID_KEYSTORE_PRIVATE_KEY_PASSWORD'),
+                storeFile   : rootProject.file(System.getenv('BITRISEIO_ANDROID_KEYSTORE_NAME')),
+                storePassword: System.getenv('BITRISEIO_ANDROID_KEYSTORE_PASSWORD')]
+    }
+    File keystoreFile = rootProject.file('keystore.properties')
+    if (keystoreFile.isFile()) {
+        Properties keystoreProps = new Properties()
+        keystoreFile.withInputStream { keystoreProps.load(it) }
+        return [keyAlias    : keystoreProps['keyAlias'],
+                keyPassword : keystoreProps['keyPassword'],
+                storeFile   : file(keystoreProps['storeFile']),
+                storePassword: keystoreProps['storePassword']]
+    }
+    if (project.ext.midletExportSigning != null) {
+        return project.ext.midletExportSigning
+    }
+    logger.warn('No signing key found (keystore.properties); release APKs will be unsigned.')
+    return null
+}
+
 def getMidletManifestProperties() {
     def file = project.file('src/midlet/resources/MIDLET-META-INF/MANIFEST.MF')
     def mf = new java.util.jar.Manifest()
@@ -158,6 +233,12 @@ dependencies {
     def autoServiceVersion = "1.0"
 
     implementation project(':dexlib')
+
+    // The imported suite: AGP dexes its classes and packages its other entries as java
+    // resources, which is exactly where AppClassLoader looks for them in a midlet build.
+    if (midletImport != null) {
+        midletImplementation files(midletImport.classesJar)
+    }
 
     // Android Jetpack
     implementation "androidx.room:room-runtime:$roomVersion"

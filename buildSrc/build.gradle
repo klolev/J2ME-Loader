@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+sourceSets {
+    main {
+        // The bytecode rewriting applied to an imported MIDlet must be identical to the
+        // one the emulator applies when installing a JAR at runtime, so the visitors are
+        // compiled from ':dexlib' rather than duplicated here.
+        java.srcDir new File(rootDir.parentFile, 'dexlib/src/main/java')
+        java.include 'ru/woesss/j2me/gradle/**', 'org/microemu/android/asm/**'
+    }
+}
+
+dependencies {
+    implementation 'org.ow2.asm:asm:9.8'
+}

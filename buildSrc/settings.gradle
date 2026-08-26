@@ -1,0 +1,12 @@
+/*
+ * Build logic for importing a MIDlet suite into the 'midlet' product flavor.
+ * Kept as a standalone build so it does not inherit the root project's
+ * repository restrictions.
+ */
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+}
+rootProject.name = 'buildSrc'

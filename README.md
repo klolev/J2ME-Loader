@@ -25,6 +25,40 @@ System requirements: Android 4.0+
 [List of the tested Java Games (Non Touchscreen)](https://github.com/nikita36078/J2ME-Loader/wiki/List-of-Tested-Java-Games-(Non-Touchscreen))  
 [List of the Java Games with Bugs](https://github.com/nikita36078/J2ME-Loader/wiki/List-of-Java-Games-with-Bugs)
 
+## Exporting a MIDlet as an APK
+
+A single MIDlet suite can be built into a standalone Android app: the emulator and the game
+in one APK, carrying the game's own name and icon and launching straight into it, with no app
+list and no separate install step.
+
+```sh
+./export-apk.sh game.jar             # or a .jad, next to its .jar
+```
+
+The APK is written to `app/build/outputs/apk/midlet/release/`, signed with a key generated on
+first use (`midlet-export.keystore`) so that it installs. Keep that file: an exported app can
+only be updated in place by an APK signed with the same key. To sign with your own key
+instead, put a `keystore.properties` in the project root.
+
+A JAD whose `MIDlet-Jar-URL` points at a remote file is downloaded, the same way the emulator
+fetches it when installing a suite on a device.
+
+```sh
+./export-apk.sh game.jad --debug                        # skip shrinking; builds faster
+./export-apk.sh game.jar --package com.example.mygame   # instead of a derived id
+./export-apk.sh game.jar --version-code 42              # instead of one from MIDlet-Version
+```
+
+The application id, version, app label and launcher icon all come from the suite descriptor.
+Gradle can be driven directly if you would rather not use the script:
+
+```sh
+./gradlew assembleMidletRelease -Pmidlet=/path/to/game.jar
+```
+
+The same `midlet` flavor still builds a port from J2ME **sources** placed in `app/src/midlet`
+when no `-Pmidlet` is given.
+
 ## Tips
  - Enabling filtering in some cases can greatly reduce performance. Disable this option if game is too slow.
  - Image flickering issues can be fixed by enabling the "Immediate processing mode" option.

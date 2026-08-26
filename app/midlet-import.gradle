@@ -1,0 +1,120 @@
+/*
+ *  Copyright 2024 J2ME Loader contributors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+import ru.woesss.j2me.gradle.MidletImporter
+
+/*
+ * Turns a MIDlet suite into an APK.
+ *
+ *     ./gradlew -Pmidlet=/path/to/game.jar assembleMidletRelease
+ *
+ * The 'midlet' flavor builds the emulator around a single suite instead of around an app
+ * list. It was written for porting J2ME *sources*, which still works when no -Pmidlet is
+ * given; this file adds the other half, taking an already compiled suite - a JAR, or a JAD
+ * next to its JAR - and folding it into the same flavor.
+ *
+ * The import runs during configuration because the flavor's application id, version and
+ * label all come out of the suite's descriptor, and AGP needs those before it creates any
+ * task. It is cheap (unzip, rewrite, rezip) and skips itself when the suite has not changed.
+ *
+ * Properties:
+ *   -Pmidlet=<path>          the suite's .jar or .jad          (or the MIDLET env variable)
+ *   -PmidletPackage=<id>     application id to use instead of the derived one
+ *   -PmidletVersionCode=<n>  version code to use instead of the derived one
+ */
+
+ext.midletImport = null
+ext.midletExportSigning = null
+
+def midletSource = findProperty('midlet') ?: System.getenv('MIDLET')
+
+if (midletSource) {
+	File source = resolveMidletPath(midletSource.toString())
+	def importer = new MidletImporter(layout.buildDirectory.dir('midlet-import').get().asFile)
+	def versionCodeOverride = findProperty('midletVersionCode')?.toString()?.toInteger()
+	def result = importer.importSuite(source, findProperty('midletPackage')?.toString(), versionCodeOverride)
+
+	logger.lifecycle("MIDlet: ${result.appName} ${result.versionName} (${result.summary})")
+	logger.lifecycle("        ${result.applicationId}, versionCode ${result.versionCode}," +
+			" MIDlets: ${result.midletTitles.join(', ')}")
+	importer.warnings.each { logger.warn("MIDlet import: $it") }
+
+	ext.midletImport = result
+	// A debug build is signed with the debug key, so there is no reason to make an export
+	// key for one. Anything less clear-cut prepares the key: an unsigned release APK that
+	// nothing can install would be the worse surprise.
+	def taskNames = gradle.startParameter.taskNames
+	def debugOnly = !taskNames.isEmpty() && taskNames.every { it.toLowerCase(Locale.ROOT).contains('debug') }
+	ext.midletExportSigning = debugOnly ? null : resolveExportSigning()
+}
+
+/**
+ * Resolves a suite path the way a shell would: relative to where gradle was invoked, then
+ * to the project, rather than to this module's directory.
+ */
+File resolveMidletPath(String path) {
+	File asGiven = new File(path)
+	if (asGiven.absolute) {
+		return asGiven
+	}
+	def roots = [gradle.startParameter.currentDir, rootDir, projectDir]
+	def candidates = roots.collect { new File(it, path) }
+	return candidates.find { it.isFile() } ?: candidates.first()
+}
+
+/**
+ * A signing key for the exported APK.
+ *
+ * <p>Android refuses to install an unsigned APK, so an export that no one can install is not
+ * an export. When the repository carries no release credentials, one key is generated and
+ * kept next to the project: reusing it means a rebuilt suite installs over the one already
+ * on the device instead of being refused as a different app.
+ *
+ * @return a map of signing settings, or null if no key could be prepared
+ */
+Map<String, Object> resolveExportSigning() {
+	File keystore = rootProject.file('midlet-export.keystore')
+	String password = 'midlet-export'
+	String alias = 'midlet'
+	if (!keystore.isFile()) {
+		File keytool = new File(System.getProperty('java.home'), 'bin/keytool')
+		def command = [keytool.isFile() ? keytool.path : 'keytool',
+					   '-genkeypair', '-noprompt',
+					   '-keystore', keystore.path,
+					   '-storepass', password,
+					   '-keypass', password,
+					   '-alias', alias,
+					   '-keyalg', 'RSA',
+					   '-keysize', '2048',
+					   '-validity', '10000',
+					   '-dname', 'CN=J2ME Loader MIDlet Port, O=J2ME Loader, C=US']
+		try {
+			def process = new ProcessBuilder(command).redirectErrorStream(true).start()
+			String output = process.inputStream.text
+			if (process.waitFor() != 0 || !keystore.isFile()) {
+				logger.warn("MIDlet export: can't generate a signing key, the APK will be unsigned.\n$output")
+				return null
+			}
+		} catch (Exception e) {
+			logger.warn("MIDlet export: can't run keytool, the APK will be unsigned: $e")
+			return null
+		}
+		logger.lifecycle("MIDlet export: generated a signing key at ${keystore.name}." +
+				" Keep it to be able to update the installed app; replace it with" +
+				" keystore.properties to sign with your own key.")
+	}
+	return [storeFile: keystore, storePassword: password, keyAlias: alias, keyPassword: password]
+}
