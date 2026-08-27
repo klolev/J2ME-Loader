@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package ru.woesss.j2me.gradle;
+package ru.woesss.j2me.apk;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -31,7 +31,7 @@ import java.util.List;
  * makes the pool the cheapest place to learn what a compiled suite depends on. Only the pool
  * is read; the rest of the class file is left alone.
  */
-final class ConstantPool {
+public final class ConstantPool {
 	private static final int MAGIC = 0xCAFEBABE;
 
 	private static final int UTF8 = 1;
@@ -52,13 +52,13 @@ final class ConstantPool {
 	private static final int MODULE = 19;
 	private static final int PACKAGE = 20;
 
-	final List<String> strings;
+	public final List<String> strings;
 
 	private ConstantPool(List<String> strings) {
 		this.strings = strings;
 	}
 
-	static ConstantPool read(byte[] classData) {
+	public static ConstantPool read(byte[] classData) {
 		List<String> strings = new ArrayList<>();
 		try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(classData))) {
 			if (in.readInt() != MAGIC) {

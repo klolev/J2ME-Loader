@@ -38,9 +38,12 @@ import ru.woesss.j2me.jar.Descriptor;
  *
  * <p>Everything here comes from Android's own parser rather than from what the build meant to
  * produce, so what the user is shown is what will be installed. That matters most for the
- * permissions: a port carries the emulator's whole set, because any MIDlet might use the
- * camera or the microphone, and a game asking for those deserves saying out loud before the
- * install begins rather than after.
+ * permissions: a game asking for the camera or the microphone deserves saying out loud before
+ * the install begins rather than after.
+ *
+ * <p>The build narrows that list to what the suite was found to use, so how much it left out
+ * is worth showing too - it is the difference between an app that asks for the camera and an
+ * emulator that always did.
  */
 public class PortSummary {
 	public final String label;
@@ -49,15 +52,18 @@ public class PortSummary {
 	public final long apkSize;
 	public final List<String> permissions;
 	public final List<String> midlets;
+	/** How many the build left out because nothing in the suite reached for them. */
+	public final int trimmedPermissions;
 
 	private PortSummary(String label, String packageName, String versionName, long apkSize,
-						List<String> permissions, List<String> midlets) {
+						List<String> permissions, List<String> midlets, int trimmedPermissions) {
 		this.label = label;
 		this.packageName = packageName;
 		this.versionName = versionName;
 		this.apkSize = apkSize;
 		this.permissions = permissions;
 		this.midlets = midlets;
+		this.trimmedPermissions = trimmedPermissions;
 	}
 
 	/**
@@ -66,7 +72,9 @@ public class PortSummary {
 	 * @return the summary, or null if Android cannot parse the APK - which is itself worth
 	 * knowing before handing it over
 	 */
-	public static PortSummary read(Context context, File apk, Descriptor descriptor) {
+	public static PortSummary read(Context context, PortBuilder.Result built,
+								   Descriptor descriptor) {
+		File apk = built.apk;
 		PackageManager pm = context.getPackageManager();
 		PackageInfo info = pm.getPackageArchiveInfo(apk.getPath(), PackageManager.GET_PERMISSIONS);
 		if (info == null) {
@@ -89,7 +97,7 @@ public class PortSummary {
 			midlets.add(comma == -1 ? value.trim() : value.substring(0, comma).trim());
 		}
 		return new PortSummary(descriptor.getName(), info.packageName, info.versionName,
-				apk.length(), permissions, midlets);
+				apk.length(), permissions, midlets, built.removedPermissions.size());
 	}
 
 	/** The wording Android itself uses for a permission, falling back to its bare name. */
@@ -130,6 +138,10 @@ public class PortSummary {
 			for (String permission : permissions) {
 				text.append("• ").append(permission).append('\n');
 			}
+		}
+		if (trimmedPermissions > 0) {
+			text.append('\n').append(context.getResources().getQuantityString(
+					R.plurals.port_permissions_trimmed, trimmedPermissions, trimmedPermissions));
 		}
 		return text;
 	}

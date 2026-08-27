@@ -202,7 +202,10 @@
     <string name="port_size">Size:</string>
     <string name="port_midlets">Contains:</string>
     <string name="port_permissions">Permissions it will request</string>
-    <string name="port_permissions_note">The emulator is packaged with the app, so it asks for everything a MIDlet might use \u2014 not everything this one does.</string>
+    <plurals name="port_permissions_trimmed">
+        <item quantity="one">One permission the emulator would normally ask for was left out: nothing in this MIDlet uses it.</item>
+        <item quantity="other">%1$d permissions the emulator would normally ask for were left out: nothing in this MIDlet uses them.</item>
+    </plurals>
     <string name="port_unreadable">Android could not read the app that was built.</string>
     <string name="port_building">Building an app from this MIDlet\u2026</string>
     <string name="port_needs_newer_android">Installing a MIDlet as its own app needs Android 11 or newer.</string>

@@ -21,11 +21,13 @@ import android.os.Build;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import ru.playsoftware.j2meloader.config.Config;
 import ru.playsoftware.j2meloader.util.FileUtils;
 import ru.woesss.j2me.apk.ApkRepackager;
 import ru.woesss.j2me.apk.PortNaming;
+import ru.woesss.j2me.apk.PortPermissions;
 import ru.woesss.j2me.apk.PortSigner;
 import ru.woesss.j2me.jar.Descriptor;
 
@@ -43,6 +45,26 @@ public class PortBuilder {
 	private static final String KEYSTORE_NAME = "port-signing.p12";
 	/** A local key protects nothing, so this only has to be the same every time. */
 	private static final char[] KEYSTORE_PASSWORD = "j2meloader".toCharArray();
+
+	/** A built port, and what building it worked out about the suite. */
+	public static final class Result {
+		/** The signed APK, ready to hand to the package installer. */
+		public final File apk;
+		/** What the suite was found to reach for. */
+		public final PortPermissions.Detection permissions;
+		/** The permissions the template asked for that this port does not. */
+		public final List<String> removedPermissions;
+		/** Anything the repackager wants said out loud. */
+		public final List<String> warnings;
+
+		Result(File apk, PortPermissions.Detection permissions, List<String> removedPermissions,
+			   List<String> warnings) {
+			this.apk = apk;
+			this.permissions = permissions;
+			this.removedPermissions = removedPermissions;
+			this.warnings = warnings;
+		}
+	}
 
 	private final Context context;
 
@@ -68,9 +90,9 @@ public class PortBuilder {
 	 *
 	 * @param appDir    the suite's directory, as the emulator laid it out
 	 * @param descriptor the suite descriptor, for the port's name and version
-	 * @return a signed APK, ready to hand to the package installer
+	 * @return the signed APK and what was learned about the suite along the way
 	 */
-	public File build(File appDir, Descriptor descriptor) throws IOException {
+	public Result build(File appDir, Descriptor descriptor) throws IOException {
 		if (!isSupported()) {
 			throw new IOException(context.getString(
 					ru.playsoftware.j2meloader.R.string.port_needs_newer_android));
@@ -103,6 +125,12 @@ public class PortBuilder {
 		// The template carries every ABI so it can serve any device; this port runs on this
 		// device, and the rest is several megabytes Android would never look at.
 		port.abis = Build.SUPPORTED_ABIS;
+		// The template asks for everything any MIDlet might want. This one is right here to
+		// be read, so the port can ask for what it actually uses instead.
+		port.permissions = PortPermissions.detect(
+				descriptor.getAttrs().get(Descriptor.MIDLET_PERMISSIONS),
+				descriptor.getAttrs().get(Descriptor.MIDLET_PERMISSIONS_OPT),
+				port.suiteJar);
 
 		File workDir = new File(context.getCacheDir(), "ports");
 		if (!workDir.isDirectory() && !workDir.mkdirs()) {
@@ -127,6 +155,7 @@ public class PortBuilder {
 			//noinspection ResultOfMethodCallIgnored
 			unsigned.delete();
 		}
-		return signed;
+		return new Result(signed, port.permissions, repackager.getRemovedPermissions(),
+				repackager.getWarnings());
 	}
 }

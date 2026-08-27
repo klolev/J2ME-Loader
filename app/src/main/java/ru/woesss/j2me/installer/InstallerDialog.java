@@ -247,12 +247,12 @@ public class InstallerDialog extends DialogFragment {
 		Disposable disposable = Single.fromCallable(() -> {
 					Descriptor descriptor = new Descriptor(
 							new File(appDir, Config.MIDLET_MANIFEST_FILE), false);
-					File apk = new PortBuilder(context).build(appDir, descriptor);
-					PortSummary summary = PortSummary.read(context, apk, descriptor);
+					PortBuilder.Result built = new PortBuilder(context).build(appDir, descriptor);
+					PortSummary summary = PortSummary.read(context, built, descriptor);
 					if (summary == null) {
 						throw new IOException(getString(R.string.port_unreadable));
 					}
-					return new Object[]{apk, summary};
+					return new Object[]{built.apk, summary};
 				})
 				.subscribeOn(Schedulers.computation())
 				.observeOn(AndroidSchedulers.mainThread())
@@ -274,13 +274,7 @@ public class InstallerDialog extends DialogFragment {
 		}
 		hideProgress();
 		binding.installationStatus.setText(R.string.port_confirm_title);
-		SpannableStringBuilder message = new SpannableStringBuilder(summary.describe(requireContext()));
-		if (!summary.permissions.isEmpty()) {
-			// The list above is the emulator's, not this MIDlet's, and reads alarmingly
-			// without that context.
-			message.append('\n').append(getString(R.string.port_permissions_note));
-		}
-		mDialog.setMessage(message);
+		mDialog.setMessage(summary.describe(requireContext()));
 		btnRun.setVisibility(View.GONE);
 		btnOk.setText(R.string.action_install);
 		btnOk.setOnClickListener(v -> {

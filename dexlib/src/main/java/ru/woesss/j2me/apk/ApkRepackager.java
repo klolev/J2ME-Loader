@@ -78,6 +78,7 @@ public final class ApkRepackager {
 
 	private final File template;
 	private final List<String> warnings = new ArrayList<>();
+	private final List<String> removedPermissions = new ArrayList<>();
 
 	public ApkRepackager(File template) {
 		this.template = template;
@@ -85,6 +86,11 @@ public final class ApkRepackager {
 
 	public List<String> getWarnings() {
 		return warnings;
+	}
+
+	/** The permissions the last repackage took out of the template's manifest. */
+	public List<String> getRemovedPermissions() {
+		return removedPermissions;
 	}
 
 	/** Everything that distinguishes one port from another. */
@@ -117,6 +123,16 @@ public final class ApkRepackager {
 		 * meant to be handed to someone else, whose device may not be this one.
 		 */
 		public String[] abis;
+
+		/**
+		 * What the suite was found to need, or null to keep every permission the template
+		 * declares.
+		 *
+		 * <p>A template asks for everything any MIDlet might want, because it does not know
+		 * which one it will become. A port does know, so the ones this suite never reaches
+		 * for are worth taking back out - see {@link PortPermissions}.
+		 */
+		public PortPermissions.Detection permissions;
 	}
 
 	/** Whether an entry is a native library for an ABI outside {@code abis}. */
@@ -189,6 +205,19 @@ public final class ApkRepackager {
 		}
 		if (port.versionName != null) {
 			xml.replace(TEMPLATE_VERSION, port.versionName);
+		}
+		if (port.permissions != null) {
+			List<String> declared = xml.getUsesPermissions();
+			removedPermissions.clear();
+			removedPermissions.addAll(port.permissions.removableFrom(declared));
+			xml.removeUsesPermissions(removedPermissions);
+			for (String missing : port.permissions.missingFrom(declared)) {
+				// Adding one back would mean compiling a resource, which is the whole thing
+				// templates exist to avoid. Saying so beats a feature that silently does
+				// nothing.
+				warnings.add("The suite looks like it needs " + missing
+						+ ", which the template does not declare");
+			}
 		}
 		return xml.toByteArray();
 	}

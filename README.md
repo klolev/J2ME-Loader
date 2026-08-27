@@ -78,6 +78,30 @@ Gradle can be driven directly if you would rather not use the script:
 The same `midlet` flavor still builds a port from J2ME **sources** placed in `app/src/midlet`
 when no `-Pmidlet` is given.
 
+### Permissions
+
+The emulator asks for every permission a MIDlet might want - the camera, the microphone, a
+location fix, Bluetooth - because it does not know which MIDlet it will be asked to run. An
+exported app does know, so the build reads the suite and asks for less.
+
+Two things are read: the `MIDlet-Permissions` the descriptor declares, and the suite's own
+bytecode, which is the one that can be relied on - the declaration is optional and routinely
+left out. Every type a class mentions and every string constant it holds sits in its constant
+pool, so `Connector.open("btspp://...")` and a reference to `javax.microedition.location` are
+both visible without running anything, obfuscated or not. The build prints what it found:
+
+```
+MIDlet: Bejeweled 4.14.42 (bejeweled.jar: 14 class(es), 19 resource(s))
+        uses: VIBRATE (vibrate)
+        dropping 12 permission(s) the emulator would otherwise ask for: CAMERA, RECORD_AUDIO, ...
+```
+
+Only the permissions Android puts to the user in a dialog are dropped this way. The
+install-time ones - `INTERNET`, `VIBRATE` - are invisible to the user and stay whatever the
+suite looks like, so a game that builds its URLs a piece at a time keeps its network. If a
+suite is misread and loses something it did want, the emulator asks for permissions at the
+point of use and already handles being told no, so the feature degrades rather than crashing.
+
 ## Tips
  - Enabling filtering in some cases can greatly reduce performance. Disable this option if game is too slow.
  - Image flickering issues can be fixed by enabling the "Immediate processing mode" option.

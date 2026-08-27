@@ -8,6 +8,7 @@ plugins {
 apply from: 'midlet-import.gradle'
 
 def midletImport = project.ext.midletImport
+def midletManifest = project.ext.midletManifest
 def midletTemplate = project.ext.midletTemplate
 def releaseSigning = resolveReleaseSigning()
 def midletArchivesBaseName
@@ -149,6 +150,8 @@ android {
             if (midletImport.resDir != null) {
                 midlet.res.srcDirs += midletImport.resDir
             }
+            // Carries the removal of every permission this suite gave no reason to want.
+            midlet.manifest.srcFile midletManifest
         }
     }
 

@@ -25,6 +25,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import ru.woesss.j2me.apk.ConstantPool;
 
 import java.awt.Color;
 import java.awt.Graphics2D;

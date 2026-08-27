@@ -19,6 +19,8 @@ package ru.woesss.j2me.gradle;
 import java.io.File;
 import java.util.List;
 
+import ru.woesss.j2me.apk.PortPermissions;
+
 /**
  * Everything the {@code midlet} flavor needs in order to build an APK for one suite.
  * Produced by {@link MidletImporter}, consumed by {@code app/build.gradle}.
@@ -55,10 +57,18 @@ public final class MidletImport {
 	/** Paths of the suite entries that will be packaged as Java resources. */
 	public final List<String> resourcePaths;
 
+	/**
+	 * What the suite was found to reach for.
+	 *
+	 * <p>The emulator declares every permission any MIDlet might want. This one is here to be
+	 * read, so the port can declare what it uses instead - see {@link PortPermissions}.
+	 */
+	public final PortPermissions.Detection permissions;
+
 	MidletImport(MidletDescriptor descriptor, File classesJar, File resDir, File proguardFile,
 				 String appName, String archiveName, String applicationId,
 				 String versionName, int versionCode, List<String> midletTitles, String summary,
-				 List<String> resourcePaths) {
+				 List<String> resourcePaths, PortPermissions.Detection permissions) {
 		this.descriptor = descriptor;
 		this.classesJar = classesJar;
 		this.resDir = resDir;
@@ -71,5 +81,6 @@ public final class MidletImport {
 		this.midletTitles = midletTitles;
 		this.summary = summary;
 		this.resourcePaths = resourcePaths;
+		this.permissions = permissions;
 	}
 }

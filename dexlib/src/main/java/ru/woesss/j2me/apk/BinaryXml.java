@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -42,6 +43,7 @@ public final class BinaryXml {
 	private static final int TYPE_XML = 0x0003;
 	private static final int TYPE_STRING_POOL = 0x0001;
 	private static final int TYPE_START_ELEMENT = 0x0102;
+	private static final int TYPE_END_ELEMENT = 0x0103;
 
 	private static final int FLAG_SORTED = 1;
 	private static final int FLAG_UTF8 = 1 << 8;
@@ -52,8 +54,11 @@ public final class BinaryXml {
 	/** Size of one attribute record inside a start-element chunk. */
 	private static final int ATTRIBUTE_SIZE = 20;
 
+	private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
+	private static final String USES_PERMISSION = "uses-permission";
+
 	private final List<String> strings;
-	private final byte[] tail;
+	private byte[] tail;
 	private int poolFlags;
 
 	private BinaryXml(List<String> strings, int poolFlags, byte[] tail) {
@@ -158,6 +163,123 @@ public final class BinaryXml {
 			}
 		}
 		return null;
+	}
+
+	/** The permissions this manifest asks for, in the order it declares them. */
+	public List<String> getUsesPermissions() {
+		List<String> names = new ArrayList<>();
+		for (int start : elementStarts()) {
+			if (USES_PERMISSION.equals(elementName(start))) {
+				String name = androidName(start);
+				if (name != null) {
+					names.add(name);
+				}
+			}
+		}
+		return names;
+	}
+
+	/**
+	 * Deletes the {@code <uses-permission>} declarations naming any of {@code names}.
+	 *
+	 * <p>A permission is not a string the way a label is: it is an element, and leaving its
+	 * name behind in the pool while deleting nothing would change nothing at all. So this
+	 * cuts the element out of the tree instead - which is possible only because a compiled
+	 * XML file is a flat run of chunks with no index over it, so removing a chunk leaves
+	 * every other chunk saying exactly what it said before.
+	 *
+	 * <p>The strings themselves are left in the pool. They are unreferenced afterwards, which
+	 * costs a few bytes and keeps every other element's indices pointing where they did.
+	 *
+	 * @return how many declarations were removed
+	 */
+	public int removeUsesPermissions(Collection<String> names) {
+		if (names.isEmpty()) {
+			return 0;
+		}
+		List<int[]> cuts = new ArrayList<>();
+		List<Integer> starts = elementStarts();
+		for (int i = 0; i < starts.size(); i++) {
+			int start = starts.get(i);
+			if (!USES_PERMISSION.equals(elementName(start)) || !names.contains(androidName(start))) {
+				continue;
+			}
+			// A uses-permission element has no children, so its end tag is the next chunk.
+			int end = start + readInt(tail, start + 4);
+			if (end + CHUNK_HEADER_SIZE <= tail.length && readShort(tail, end) == TYPE_END_ELEMENT) {
+				end += readInt(tail, end + 4);
+			}
+			cuts.add(new int[]{start, end});
+		}
+		if (cuts.isEmpty()) {
+			return 0;
+		}
+		int removedBytes = 0;
+		for (int[] cut : cuts) {
+			removedBytes += cut[1] - cut[0];
+		}
+		byte[] trimmed = new byte[tail.length - removedBytes];
+		int at = 0;
+		int from = 0;
+		for (int[] cut : cuts) {
+			System.arraycopy(tail, from, trimmed, at, cut[0] - from);
+			at += cut[0] - from;
+			from = cut[1];
+		}
+		System.arraycopy(tail, from, trimmed, at, tail.length - from);
+		tail = trimmed;
+		return cuts.size();
+	}
+
+	/** Offsets of every start-element chunk, in document order. */
+	private List<Integer> elementStarts() {
+		List<Integer> starts = new ArrayList<>();
+		int at = 0;
+		while (at + CHUNK_HEADER_SIZE <= tail.length) {
+			int type = readShort(tail, at);
+			int size = readInt(tail, at + 4);
+			if (size < CHUNK_HEADER_SIZE || at + size > tail.length) {
+				break;
+			}
+			if (type == TYPE_START_ELEMENT) {
+				starts.add(at);
+			}
+			at += size;
+		}
+		return starts;
+	}
+
+	/** The tag name of the start-element chunk at {@code start}. */
+	private String elementName(int start) {
+		int headerSize = readShort(tail, start + 2);
+		return stringAt(readInt(tail, start + headerSize + 4));
+	}
+
+	/** The {@code android:name} of the start-element chunk at {@code start}, or null. */
+	private String androidName(int start) {
+		int namespace = strings.indexOf(ANDROID_NS);
+		int name = strings.indexOf("name");
+		if (namespace == -1 || name == -1) {
+			return null;
+		}
+		int headerSize = readShort(tail, start + 2);
+		int at = start + headerSize;
+		int attributeStart = readShort(tail, at + 8);
+		int attributeCount = readShort(tail, at + 12);
+		for (int i = 0; i < attributeCount; i++) {
+			int attribute = at + attributeStart + i * ATTRIBUTE_SIZE;
+			if (attribute + ATTRIBUTE_SIZE > tail.length) {
+				return null;
+			}
+			if (readInt(tail, attribute) == namespace && readInt(tail, attribute + 4) == name) {
+				return stringAt(readInt(tail, attribute + 8));
+			}
+		}
+		return null;
+	}
+
+	private String stringAt(int index) {
+		return index >= 0 && index < strings.size() ? strings.get(index) : null;
 	}
 
 	/**

@@ -56,6 +56,7 @@ import groovy.json.JsonSlurper
 
 ext.midletImport = null
 ext.midletExportSigning = null
+ext.midletManifest = null
 // A template is an APK with nothing but the emulator in it, built so that the repackager
 // can stamp a suite into it on a device, where no resource compiler is available.
 ext.midletTemplate = findProperty('midletTemplate') != null
@@ -77,15 +78,54 @@ if (midletSource) {
 	logger.lifecycle("MIDlet: ${result.appName} ${result.versionName} (${result.summary})")
 	logger.lifecycle("        ${result.applicationId}, versionCode ${result.versionCode}," +
 			" MIDlets: ${result.midletTitles.join(', ')}")
+	def uses = result.permissions.needs.collect { "${it.permission - 'android.permission.'} (${it.evidence.join(', ')})" }
+	logger.lifecycle("        uses: ${uses.isEmpty() ? 'nothing that needs a permission' : uses.join('; ')}")
 	importer.warnings.each { logger.warn("MIDlet import: $it") }
 
 	ext.midletImport = result
+	ext.midletManifest = writeTrimmedManifest(result)
 	// A debug build is signed with the debug key, so there is no reason to make an export
 	// key for one. Anything less clear-cut prepares the key: an unsigned release APK that
 	// nothing can install would be the worse surprise.
 	def taskNames = gradle.startParameter.taskNames
 	def debugOnly = !taskNames.isEmpty() && taskNames.every { it.toLowerCase(Locale.ROOT).contains('debug') }
 	ext.midletExportSigning = debugOnly ? null : resolveExportSigning()
+}
+
+/**
+ * The flavor manifest to build this port against: the one in 'src/midlet' plus a removal for
+ * every permission the suite gave no reason to want.
+ *
+ * <p>The emulator asks for everything a MIDlet might use, because it does not know which
+ * MIDlet it will be asked to run. A port does know, so it can ask for less. Removing rather
+ * than declaring keeps 'src/midlet/AndroidManifest.xml' the one place a port's manifest is
+ * described, and a removal for a permission nothing declared is simply ignored by the merger.
+ *
+ * @return the generated manifest, or the stock one when the suite turns out to need it all
+ */
+File writeTrimmedManifest(result) {
+	File base = file('src/midlet/AndroidManifest.xml')
+	List<String> removable = result.permissions.removable()
+	if (removable.isEmpty()) {
+		return base
+	}
+	logger.lifecycle("        dropping ${removable.size()} permission(s) the emulator would" +
+			" otherwise ask for: ${removable.collect { it - 'android.permission.' }.join(', ')}")
+	String removals = removable.collect {
+		"    <uses-permission android:name=\"$it\" tools:node=\"remove\" />"
+	}.join('\n')
+	String text = base.getText('UTF-8')
+	int at = text.lastIndexOf('</manifest>')
+	if (at == -1) {
+		throw new GradleException("No </manifest> in $base")
+	}
+	String generated = text.substring(0, at) +
+			"    <!-- Generated from the suite: what it never reaches for, it does not ask for. -->\n" +
+			removals + "\n\n" + text.substring(at)
+	File target = layout.buildDirectory.file('midlet-import/AndroidManifest.xml').get().asFile
+	target.parentFile.mkdirs()
+	target.setText(generated, 'UTF-8')
+	return target
 }
 
 /**

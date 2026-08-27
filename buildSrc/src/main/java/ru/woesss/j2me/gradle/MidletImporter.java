@@ -18,6 +18,8 @@ package ru.woesss.j2me.gradle;
 
 import org.microemu.android.asm.AndroidProducer;
 
+import ru.woesss.j2me.apk.ConstantPool;
+import ru.woesss.j2me.apk.PortPermissions;
 import ru.woesss.j2me.apk.PortNaming;
 
 import java.io.ByteArrayOutputStream;
@@ -168,9 +170,15 @@ public final class MidletImporter {
 				? new String(Files.readAllBytes(summaryFile.toPath()), StandardCharsets.UTF_8)
 				: jar.getName();
 
+		// Read from the suite as it arrived rather than from the repacked jar: what matters
+		// is what its author wrote, not what instrumenting it added.
+		PortPermissions.Detection permissions = PortPermissions.detect(
+				descriptor.get(MidletDescriptor.MIDLET_PERMISSIONS),
+				descriptor.get(MidletDescriptor.MIDLET_PERMISSIONS_OPT), jar);
+
 		return new MidletImport(descriptor, classesJar, resDir.isDirectory() ? resDir : null, proguardFile,
 				appName, archiveName, applicationId, versionName, versionCode, titles, summary,
-				listResources(classesJar));
+				listResources(classesJar), permissions);
 	}
 
 	// --- source resolution -------------------------------------------------------------

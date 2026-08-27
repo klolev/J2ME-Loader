@@ -43,6 +43,8 @@ public final class MidletDescriptor {
 	public static final String MIDLET_VENDOR = "MIDlet-Vendor";
 	public static final String MIDLET_ICON = "MIDlet-Icon";
 	public static final String MIDLET_JAR_URL = "MIDlet-Jar-URL";
+	public static final String MIDLET_PERMISSIONS = "MIDlet-Permissions";
+	public static final String MIDLET_PERMISSIONS_OPT = "MIDlet-Permissions-Opt";
 	public static final String MIDLET_N = "MIDlet-";
 	public static final String MICROEDITION_PROFILE = "MicroEdition-Profile";
 	public static final String MICROEDITION_CONFIGURATION = "MicroEdition-Configuration";

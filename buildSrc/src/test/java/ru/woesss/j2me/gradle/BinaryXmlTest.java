@@ -21,7 +21,9 @@ import org.junit.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import ru.woesss.j2me.apk.BinaryXml;
@@ -37,6 +39,7 @@ import static org.junit.Assert.fail;
  * short strings and long - are all exercised without needing aapt2 to produce them.
  */
 public class BinaryXmlTest {
+	private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
 
 	@Test
 	public void readsAndRewritesAUtf16Pool() throws IOException {
@@ -131,7 +134,140 @@ public class BinaryXmlTest {
 		assertNull(BinaryXml.parse(compiledXml(false, "android")).getPackageName());
 	}
 
+	@Test
+	public void readsThePermissionsAManifestAsksFor() throws IOException {
+		byte[] xml = compiledManifest("com.example.game",
+				"android.permission.INTERNET", "android.permission.CAMERA");
+
+		assertEquals(Arrays.asList("android.permission.INTERNET", "android.permission.CAMERA"),
+				BinaryXml.parse(xml).getUsesPermissions());
+	}
+
+	@Test
+	public void cutsOutThePermissionsAPortWillNotUse() throws IOException {
+		byte[] xml = compiledManifest("com.example.game",
+				"android.permission.INTERNET", "android.permission.CAMERA",
+				"android.permission.VIBRATE", "android.permission.RECORD_AUDIO");
+
+		BinaryXml parsed = BinaryXml.parse(xml);
+		assertEquals(2, parsed.removeUsesPermissions(Arrays.asList(
+				"android.permission.CAMERA", "android.permission.RECORD_AUDIO")));
+
+		// Reparsed rather than merely re-read: an element removed by cutting bytes out of a
+		// chunk run has to leave the file still walkable end to end.
+		BinaryXml reparsed = BinaryXml.parse(parsed.toByteArray());
+		assertEquals(Arrays.asList("android.permission.INTERNET", "android.permission.VIBRATE"),
+				reparsed.getUsesPermissions());
+		// Everything that was not a permission is where it was.
+		assertEquals("com.example.game", reparsed.getPackageName());
+	}
+
+	@Test
+	public void removingNothingLeavesTheFileByteForByte() throws IOException {
+		byte[] xml = compiledManifest("com.example.game", "android.permission.INTERNET");
+
+		BinaryXml parsed = BinaryXml.parse(xml);
+		assertEquals(0, parsed.removeUsesPermissions(Collections.<String>emptyList()));
+		assertEquals(0, parsed.removeUsesPermissions(
+				Collections.singletonList("android.permission.CAMERA")));
+
+		assertEquals(Collections.singletonList("android.permission.INTERNET"),
+				BinaryXml.parse(parsed.toByteArray()).getUsesPermissions());
+	}
+
+	@Test
+	public void leavesElementsThatAreNotPermissionsAlone() throws IOException {
+		// uses-feature carries an android:name too, and naming a permission in one would be
+		// a coincidence worth surviving.
+		byte[] xml = compiledManifest("com.example.game", "android.permission.CAMERA");
+
+		BinaryXml parsed = BinaryXml.parse(xml);
+		parsed.removeUsesPermissions(Collections.singletonList("android.hardware.camera"));
+
+		assertEquals(Collections.singletonList("android.permission.CAMERA"),
+				BinaryXml.parse(parsed.toByteArray()).getUsesPermissions());
+	}
+
+	@Test
+	public void reportsNoPermissionsWhenThereAreNoElements() throws IOException {
+		assertEquals(Collections.<String>emptyList(),
+				BinaryXml.parse(compiledXml(false, "android")).getUsesPermissions());
+	}
+
 	// --- fixtures ----------------------------------------------------------------------
+
+	/**
+	 * Builds a compiled manifest declaring {@code permissions}, complete with the element
+	 * chunks a real one carries: a resource map to be stepped over, the {@code manifest}
+	 * element holding the application id, and a start/end pair per permission.
+	 */
+	private static byte[] compiledManifest(String applicationId, String... permissions)
+			throws IOException {
+		List<String> pool = new ArrayList<>(Arrays.asList(
+				ANDROID_NS, "name", "package", "manifest", "uses-permission", applicationId));
+		pool.addAll(Arrays.asList(permissions));
+
+		ByteArrayOutputStream tail = new ByteArrayOutputStream();
+		// A resource id map: not read here, and the walk has to step over it by size alone.
+		writeShort(tail, 0x0180);
+		writeShort(tail, 8);
+		writeInt(tail, 12);
+		writeInt(tail, 0x01010003);
+
+		writeStartElement(tail, pool, "manifest", "package", applicationId);
+		for (String permission : permissions) {
+			writeStartElement(tail, pool, "uses-permission", "name", permission);
+			writeEndElement(tail, pool, "uses-permission");
+		}
+		writeEndElement(tail, pool, "manifest");
+
+		byte[] head = compiledXml(false, pool.toArray(new String[0]));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		writeShort(out, 0x0003);
+		writeShort(out, 8);
+		writeInt(out, head.length + tail.size());
+		// Everything of the header fixture but its own 8-byte chunk header: the pool.
+		out.write(head, 8, head.length - 8);
+		out.write(tail.toByteArray());
+		return out.toByteArray();
+	}
+
+	private static void writeStartElement(ByteArrayOutputStream out, List<String> pool,
+										  String element, String attribute, String value)
+			throws IOException {
+		boolean namespaced = !"package".equals(attribute);
+		writeShort(out, 0x0102);
+		writeShort(out, 16);
+		writeInt(out, 16 + 20 + 20); // header, attrExt, one attribute
+		writeInt(out, 1);  // line number
+		writeInt(out, -1); // comment
+		writeInt(out, -1); // element namespace
+		writeInt(out, pool.indexOf(element));
+		writeShort(out, 20); // attributes start, from the end of the header
+		writeShort(out, 20); // attribute size
+		writeShort(out, 1);  // attribute count
+		writeShort(out, 0);  // id index
+		writeShort(out, 0);  // class index
+		writeShort(out, 0);  // style index
+		writeInt(out, namespaced ? pool.indexOf(ANDROID_NS) : -1);
+		writeInt(out, pool.indexOf(attribute));
+		writeInt(out, pool.indexOf(value)); // raw value
+		writeShort(out, 8);  // Res_value size
+		out.write(0);        // res0
+		out.write(0x03);     // TYPE_STRING
+		writeInt(out, pool.indexOf(value));
+	}
+
+	private static void writeEndElement(ByteArrayOutputStream out, List<String> pool,
+										String element) {
+		writeShort(out, 0x0103);
+		writeShort(out, 16);
+		writeInt(out, 16 + 8);
+		writeInt(out, 1);  // line number
+		writeInt(out, -1); // comment
+		writeInt(out, -1); // element namespace
+		writeInt(out, pool.indexOf(element));
+	}
 
 	/** Builds a compiled XML file holding just a string pool, in either encoding. */
 	private static byte[] compiledXml(boolean utf8, String... strings) throws IOException {
