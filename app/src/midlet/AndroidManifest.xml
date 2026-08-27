@@ -2,7 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <application>
+    <application
+        android:label="${midletLabel}"
+        tools:replace="android:label">
         <activity android:name=".MainActivity" tools:node="remove" />
         <activity android:name="javax.microedition.shell.MicroActivity"
             android:exported="true"

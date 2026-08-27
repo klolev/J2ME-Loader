@@ -8,6 +8,7 @@ plugins {
 apply from: 'midlet-import.gradle'
 
 def midletImport = project.ext.midletImport
+def midletTemplate = project.ext.midletTemplate
 def releaseSigning = resolveReleaseSigning()
 def midletArchivesBaseName
 
@@ -88,7 +89,21 @@ android {
         midlet {
             buildConfigField 'boolean', 'FULL_EMULATOR', 'false'
             def midletName
-            if (midletImport != null) {
+            if (midletTemplate) {
+                // Placeholder identity, rewritten by the repackager once it knows the suite.
+                // The label is a literal rather than a resource so that rewriting it is a
+                // string-pool edit, which needs no resource compiler; a port built here
+                // keeps the resource reference it has always used.
+                midletName = 'J2ME_PORT_LABEL'
+                applicationId 'ru.playsoftware.j2meloader.port'
+                versionCode 1
+                versionName '0.0.0-template'
+                midletArchivesBaseName = 'midlet-template'
+                // A template must serve any suite, and the suite is not present to be shrunk
+                // against, so it keeps the whole MIDP surface rather than what it reaches.
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                        'proguard-rules.pro', 'proguard-common.pro'
+            } else if (midletImport != null) {
                 midletName = midletImport.appName
                 applicationId midletImport.applicationId
                 versionCode midletImport.versionCode
@@ -110,11 +125,16 @@ android {
             }
             // A suite name is free text, so it can't go into a resource unescaped.
             resValue 'string', 'app_name', MidletImporter.escapeStringResource(midletName)
+            manifestPlaceholders = [midletLabel: midletTemplate ? midletName : '@string/app_name']
         }
     }
 
     sourceSets {
-        if (midletImport != null) {
+        if (midletTemplate) {
+            // A template carries no suite at all: the repackager appends one later.
+            midlet.java.srcDirs = []
+            midlet.resources.srcDirs = []
+        } else if (midletImport != null) {
             // The imported suite brings its own classes, resources and descriptor in one jar,
             // so the sample port sources - and above all the sample's MANIFEST.MF - must not
             // be packaged alongside it.

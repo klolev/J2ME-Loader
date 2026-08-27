@@ -42,6 +42,10 @@ import ru.woesss.j2me.gradle.MidletImporter
  *   -PmidletVirtualKeyboard=<bool>  show the on-screen controls
  *   -PmidletTouchInput=<bool>       deliver touches to the MIDlet as pointer events
  * Give none of these and the port asks on first launch, as it always has.
+ *
+ * A third mode builds a template rather than a finished port:
+ *   -PmidletTemplate         an APK with placeholder identity and no suite in it, for the
+ *                            on-device repackager to stamp a suite into
  */
 
 import groovy.json.JsonOutput
@@ -49,8 +53,16 @@ import groovy.json.JsonSlurper
 
 ext.midletImport = null
 ext.midletExportSigning = null
+// A template is an APK with nothing but the emulator in it, built so that the repackager
+// can stamp a suite into it on a device, where no resource compiler is available.
+ext.midletTemplate = findProperty('midletTemplate') != null
 
 def midletSource = findProperty('midlet') ?: System.getenv('MIDLET')
+
+if (midletSource && midletTemplate) {
+	throw new GradleException('-Pmidlet and -PmidletTemplate ask for different things:' +
+			' a port with a suite in it, and a template with none.')
+}
 
 if (midletSource) {
 	File source = resolveMidletPath(midletSource.toString())
