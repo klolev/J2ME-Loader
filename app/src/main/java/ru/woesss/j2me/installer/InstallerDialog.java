@@ -37,6 +37,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 
 import java.io.File;
+import java.io.IOException;
 
 import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
@@ -247,19 +248,51 @@ public class InstallerDialog extends DialogFragment {
 					Descriptor descriptor = new Descriptor(
 							new File(appDir, Config.MIDLET_MANIFEST_FILE), false);
 					File apk = new PortBuilder(context).build(appDir, descriptor);
-					new PortPackageInstaller(context).install(apk, descriptor.getName());
-					return apk;
+					PortSummary summary = PortSummary.read(context, apk, descriptor);
+					if (summary == null) {
+						throw new IOException(getString(R.string.port_unreadable));
+					}
+					return new Object[]{apk, summary};
 				})
 				.subscribeOn(Schedulers.computation())
 				.observeOn(AndroidSchedulers.mainThread())
-				.subscribe(apk -> {
-					if (!isAdded()) {
-						return;
-					}
-					// Android has taken over and is asking the user; nothing more to show.
-					dismiss();
-				}, this::onError);
+				.subscribe(built -> confirmInstall((File) built[0], (PortSummary) built[1]),
+						this::onError);
 		compositeDisposable.add(disposable);
+	}
+
+	/**
+	 * Shows what was built and waits for the user to agree to it.
+	 *
+	 * <p>Android will ask its own question next, but by then the app is a package name and a
+	 * permission list with no MIDlet in sight. This is the last point at which the thing being
+	 * installed can be described as what the user actually chose.
+	 */
+	private void confirmInstall(File apk, PortSummary summary) {
+		if (!isAdded()) {
+			return;
+		}
+		hideProgress();
+		binding.installationStatus.setText(R.string.port_confirm_title);
+		SpannableStringBuilder message = new SpannableStringBuilder(summary.describe(requireContext()));
+		if (!summary.permissions.isEmpty()) {
+			// The list above is the emulator's, not this MIDlet's, and reads alarmingly
+			// without that context.
+			message.append('\n').append(getString(R.string.port_permissions_note));
+		}
+		mDialog.setMessage(message);
+		btnRun.setVisibility(View.GONE);
+		btnOk.setText(R.string.action_install);
+		btnOk.setOnClickListener(v -> {
+			try {
+				new PortPackageInstaller(requireContext()).install(apk, summary.label);
+				dismiss();
+			} catch (IOException e) {
+				onError(e);
+			}
+		});
+		btnClose.setText(android.R.string.cancel);
+		showButtons();
 	}
 
 	private void alertConfirm(SpannableStringBuilder message,
