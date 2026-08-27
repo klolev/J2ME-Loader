@@ -13,7 +13,7 @@ sourceSets {
         // one the emulator applies when installing a JAR at runtime, so the visitors are
         // compiled from ':dexlib' rather than duplicated here.
         java.srcDir new File(rootDir.parentFile, 'dexlib/src/main/java')
-        java.include 'ru/woesss/j2me/gradle/**', 'org/microemu/android/asm/**'
+        java.include 'ru/woesss/j2me/gradle/**', 'org/microemu/android/asm/**', 'ru/woesss/j2me/apk/**'
     }
 }
 
