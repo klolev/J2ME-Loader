@@ -51,11 +51,18 @@ import java.util.TimeZone;
  * take the player's saved games with it. So it is generated once, written to a file, and
  * reused - which also means it can be backed up, or carried to another device.
  *
- * <p>The signing itself is done by {@code apksig}, the same code {@code apksigner} runs. It
- * needs {@code java.util.function}, so this works on Android 7.0 and up.
+ * <p>The signing itself is done by {@code apksig}, the same code {@code apksigner} runs, using
+ * the v2 scheme alone. Android 7.0 is where v2 arrived and also the earliest release apksig
+ * can run on, so the two floors are the same one: below it apksig wants
+ * {@code java.util.function}, and its v1 signer wants {@code java.util.Base64}, which Android
+ * did not have until 8.0. A port signed here therefore installs on Android 7.0 and up; for
+ * anything older, build the port with Gradle instead, which signs with v1 as well.
  */
 public final class PortSigner {
-	/** The earliest Android that can run apksig; below it, {@code java.util.function} is absent. */
+	/**
+	 * The earliest Android this works on - as the device doing the signing, and as the device
+	 * the signed port installs on. See the class comment for why those coincide.
+	 */
 	public static final int MIN_SDK = 24;
 
 	private static final String KEY_ALIAS = "port";
@@ -95,11 +102,17 @@ public final class PortSigner {
 			new ApkSigner.Builder(Collections.singletonList(config))
 					.setInputApk(unsigned)
 					.setOutputApk(target)
-					.setV1SigningEnabled(true)
+					// v1 is the scheme for Android before 7.0, and apksig writes it using
+					// java.util.Base64, which Android itself only gained in 8.0. Since nothing
+					// signed here can run on 6.0 anyway, v2 alone is what these devices read.
+					.setV1SigningEnabled(false)
 					.setV2SigningEnabled(true)
 					// Nothing here rotates keys, which is what v3 exists for, and its signer
 					// is the part of apksig that reaches furthest past what old Android has.
 					.setV3SigningEnabled(false)
+					// The template says it runs on far older Android than this can sign for,
+					// and without being told, apksig would insist on v1 to cover that.
+					.setMinSdkVersion(MIN_SDK)
 					.build()
 					.sign();
 		} catch (Exception e) {
