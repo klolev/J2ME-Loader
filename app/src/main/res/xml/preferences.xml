@@ -58,6 +58,13 @@
         android:summary="@string/pref_hide_vk_hw_keyboard_summary"
         android:title="@string/pref_hide_vk_hw_keyboard_title" />
     <Preference
+        android:key="pref_midlet_settings"
+        android:icon="@drawable/ic_setting_default"
+        android:summary="@string/pref_midlet_settings_summary"
+        android:title="@string/pref_midlet_settings_title"
+        app:isPreferenceVisible="false"
+        tools:isPreferenceVisible="true" />
+    <Preference
         android:key="pref_default_settings"
         android:icon="@drawable/ic_setting_default"
         android:title="@string/profiles" />

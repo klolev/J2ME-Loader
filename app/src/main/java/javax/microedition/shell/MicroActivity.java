@@ -139,11 +139,7 @@ public class MicroActivity extends AppCompatActivity {
 			appPath = data.toString();
 		} else {
 			appName = getTitle().toString();
-			appPath = getApplicationInfo().dataDir + "/files/converted/midlet";
-			File dir = new File(appPath);
-			if (!dir.exists() && !dir.mkdirs()) {
-				throw new RuntimeException("Can't access file system");
-			}
+			appPath = Config.getPortAppDir().getPath();
 		}
 		String arguments = intent.getStringExtra(KEY_START_ARGUMENTS);
 		if (arguments != null) {

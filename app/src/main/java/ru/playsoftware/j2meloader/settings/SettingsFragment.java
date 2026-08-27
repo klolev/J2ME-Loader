@@ -32,14 +32,18 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.config.Config;
+import ru.playsoftware.j2meloader.config.ConfigActivity;
 import ru.playsoftware.j2meloader.config.ProfilesActivity;
 import ru.playsoftware.j2meloader.util.FileUtils;
 import ru.playsoftware.j2meloader.util.PickDirResultContract;
 
+import static ru.playsoftware.j2meloader.util.Constants.KEY_MIDLET_NAME;
 import static ru.playsoftware.j2meloader.util.Constants.PREF_ADD_CUTOUT_AREA;
 import static ru.playsoftware.j2meloader.util.Constants.PREF_EMULATOR_DIR;
+import static ru.playsoftware.j2meloader.util.Constants.PREF_MIDLET_SETTINGS;
 
 public class SettingsFragment extends PreferenceFragmentCompat {
 	private Preference prefFolder;
@@ -50,7 +54,23 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 	@Override
 	public void onCreatePreferences(Bundle bundle, String s) {
 		addPreferencesFromResource(R.xml.preferences);
-		findPreference("pref_default_settings").setIntent(new Intent(requireActivity(), ProfilesActivity.class));
+		Preference profiles = findPreference("pref_default_settings");
+		if (BuildConfig.FULL_EMULATOR) {
+			profiles.setIntent(new Intent(requireActivity(), ProfilesActivity.class));
+		} else {
+			// A port holds a single app, so emulator-wide profiles mean nothing here and
+			// ProfilesActivity is not even packaged. What is worth reaching is that one
+			// app's own settings: this screen is what the system settings entry opens, and
+			// once the app is installed there is no other way back to them.
+			profiles.setVisible(false);
+			Preference appSettings = findPreference(PREF_MIDLET_SETTINGS);
+			appSettings.setVisible(true);
+			// A plain path, not a file: URI - ConfigActivity reads the data string as one.
+			appSettings.setIntent(new Intent(Intent.ACTION_EDIT,
+					Uri.parse(Config.getPortAppDir().getPath()),
+					requireActivity(), ConfigActivity.class)
+					.putExtra(KEY_MIDLET_NAME, getString(R.string.app_name)));
+		}
 		prefFolder = findPreference(PREF_EMULATOR_DIR);
 		prefFolder.setSummary(Config.getEmulatorDir());
 		prefFolder.setOnPreferenceClickListener(preference -> {

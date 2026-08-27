@@ -84,6 +84,23 @@ public class Config {
 		preferences.registerOnSharedPreferenceChangeListener(sPrefListener);
 	}
 
+	/**
+	 * Where a port keeps the single app it was built around.
+	 *
+	 * <p>The full emulator holds a list of apps under a storage directory the user chooses; a
+	 * port has exactly one and keeps it in private storage, so it needs no permission to
+	 * reach it. Both the screen that runs the app and the one that configures it need this
+	 * path, and they must agree on it.
+	 */
+	public static File getPortAppDir() {
+		File dir = new File(ContextHolder.getAppContext().getApplicationInfo().dataDir,
+				"files/converted/midlet");
+		if (!dir.isDirectory() && !dir.mkdirs()) {
+			throw new IllegalStateException("Can't create directory: " + dir);
+		}
+		return dir;
+	}
+
 	public static String getEmulatorDir() {
 		return emulatorDir;
 	}

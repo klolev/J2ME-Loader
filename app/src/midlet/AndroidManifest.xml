@@ -13,14 +13,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".settings.SettingsActivity">
+        <!--
+            A port has no app list to hang a settings menu off, so the entry the system
+            settings app shows for ACTION_APPLICATION_PREFERENCES is the only way back to
+            these settings. That entry is opened by the settings app, from another uid, so
+            the activity has to be exported for the declaration to mean anything.
+        -->
+        <activity android:name=".settings.SettingsActivity"
+            android:exported="true"
+            tools:replace="android:exported">
             <intent-filter>
                 <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
         <activity android:name=".donations.DonationsActivity" tools:node="remove" />
-        <activity android:name=".settings.KeyMapperActivity" tools:node="remove" />
         <activity android:name=".filepicker.FilteredFilePickerActivity" tools:node="remove" />
         <activity android:name=".config.ProfilesActivity" tools:node="remove" />
 

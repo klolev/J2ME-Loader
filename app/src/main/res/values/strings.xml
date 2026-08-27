@@ -193,6 +193,8 @@
     <string name="pref_add_cutout_area_title">Add cutout area</string>
     <string name="pref_wakelock_title">Keep screen on</string>
     <string name="pref_vibration_title">Enable vibration</string>
+    <string name="pref_midlet_settings_title">App settings</string>
+    <string name="pref_midlet_settings_summary">Screen size, controls and key mappings for this app</string>
     <string name="pref_hide_vk_hw_keyboard_title">Hide controls with a hardware keyboard</string>
     <string name="pref_hide_vk_hw_keyboard_summary">Hide the on-screen controls while a physical keyboard is available</string>
     <string name="pref_button_shape_title">Button shape</string>
