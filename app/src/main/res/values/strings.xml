@@ -193,6 +193,10 @@
     <string name="pref_add_cutout_area_title">Add cutout area</string>
     <string name="pref_wakelock_title">Keep screen on</string>
     <string name="pref_vibration_title">Enable vibration</string>
+    <string name="action_install_as_app">Install as app</string>
+    <string name="port_building">Building an app from this MIDlet\u2026</string>
+    <string name="port_needs_newer_android">Installing a MIDlet as its own app needs Android 11 or newer.</string>
+    <string name="port_template_missing">The app template is missing. Put port-template.apk here:\n%1$s</string>
     <string name="pref_midlet_settings_title">App settings</string>
     <string name="pref_midlet_settings_summary">Screen size, controls and key mappings for this app</string>
     <string name="pref_hide_vk_hw_keyboard_title">Hide controls with a hardware keyboard</string>

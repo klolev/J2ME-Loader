@@ -36,6 +36,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import java.io.File;
+
 import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
@@ -229,6 +231,37 @@ public class InstallerDialog extends DialogFragment {
 		compositeDisposable.add(disposable);
 	}
 
+	/**
+	 * Builds an APK of the suite and asks Android to install it.
+	 *
+	 * <p>This can take a while - the emulator is a large thing to copy and sign - so it runs
+	 * off the main thread, with the dialog showing progress rather than appearing to hang.
+	 */
+	private void installAsApp(AppItem app) {
+		binding.installationStatus.setText(R.string.port_building);
+		showProgress();
+		hideButtons();
+		Context context = requireContext().getApplicationContext();
+		File appDir = new File(app.getPathExt());
+		Disposable disposable = Single.fromCallable(() -> {
+					Descriptor descriptor = new Descriptor(
+							new File(appDir, Config.MIDLET_MANIFEST_FILE), false);
+					File apk = new PortBuilder(context).build(appDir, descriptor);
+					new PortPackageInstaller(context).install(apk, descriptor.getName());
+					return apk;
+				})
+				.subscribeOn(Schedulers.computation())
+				.observeOn(AndroidSchedulers.mainThread())
+				.subscribe(apk -> {
+					if (!isAdded()) {
+						return;
+					}
+					// Android has taken over and is asking the user; nothing more to show.
+					dismiss();
+				}, this::onError);
+		compositeDisposable.add(disposable);
+	}
+
 	private void alertConfirm(SpannableStringBuilder message,
 							  View.OnClickListener positive) {
 		hideProgress();
@@ -263,6 +296,13 @@ public class InstallerDialog extends DialogFragment {
 				Config.startApp(v.getContext(), app.getTitle(), app.getPathExt(), false);
 				dismiss();
 			});
+			// The suite is converted either way; making an app of it is the same conversion
+			// packaged differently, so it is offered here rather than somewhere else later.
+			if (PortBuilder.isSupported()) {
+				btnRun.setVisibility(View.VISIBLE);
+				btnRun.setText(R.string.action_install_as_app);
+				btnRun.setOnClickListener(v -> installAsApp(app));
+			}
 			btnClose.setText(R.string.close);
 			showButtons();
 			return;

@@ -19,6 +19,9 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+    <!-- Asks Android to install a suite that has been built into an app of its own. The
+         install itself is still Android's to confirm and carry out. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-sdk tools:overrideLibrary="com.arthenica.mobileffmpeg" />
 

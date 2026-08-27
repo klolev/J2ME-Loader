@@ -260,6 +260,9 @@ dependencies {
 
     implementation project(':dexlib')
 
+    // Signs a port on the device: the same code apksigner runs.
+    implementation 'com.android.tools.build:apksig:8.5.1'
+
     // The imported suite: AGP dexes its classes and packages its other entries as java
     // resources, which is exactly where AppClassLoader looks for them in a midlet build.
     if (midletImport != null) {

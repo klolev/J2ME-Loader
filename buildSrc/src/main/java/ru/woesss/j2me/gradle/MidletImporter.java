@@ -18,6 +18,8 @@ package ru.woesss.j2me.gradle;
 
 import org.microemu.android.asm.AndroidProducer;
 
+import ru.woesss.j2me.apk.PortNaming;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -637,83 +639,24 @@ public final class MidletImporter {
 		return escaped;
 	}
 
-	/** Strips what a file name can't hold, matching how the emulator names its APK output. */
+	/**
+	 * Naming is shared with the on-device repackager: the same suite has to come out with the
+	 * same application id either way, or a port rebuilt on a device would install beside the
+	 * one built by Gradle rather than updating it.
+	 */
 	static String sanitizeFileName(String name) {
-		String cleaned = name.replaceAll("[/\\\\:*?\"<>|]", "").trim().replaceAll("\\s+", "_");
-		return cleaned.isEmpty() ? "midlet" : cleaned;
+		return PortNaming.sanitizeFileName(name);
 	}
 
-	/**
-	 * Derives an application id from the suite name. Suite names are free text — spaces,
-	 * punctuation, any script — so the last package segment is reduced to what a Java
-	 * identifier allows, falling back to a digest when nothing usable survives.
-	 */
 	static String derivePackageName(String name) {
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < name.length(); i++) {
-			char c = name.charAt(i);
-			if (c >= 'A' && c <= 'Z') {
-				sb.append((char) (c - 'A' + 'a'));
-			} else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
-				sb.append(c);
-			} else if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '_') {
-				sb.append('_');
-			}
-		}
-		while (sb.length() > 0 && sb.charAt(sb.length() - 1) == '_') {
-			sb.setLength(sb.length() - 1);
-		}
-		String segment = sb.toString();
-		if (segment.isEmpty() || !Character.isLetter(segment.charAt(0)) || isJavaKeyword(segment)) {
-			// Names in a non-Latin script leave nothing to transliterate; a digest of the
-			// name still gives every suite its own stable id.
-			segment = "midlet_" + shortDigest(name);
-		}
-		return "com.example.androidlet." + segment;
+		return PortNaming.derivePackageName(name);
 	}
 
-	private static boolean isJavaKeyword(String value) {
-		switch (value) {
-			case "abstract": case "assert": case "boolean": case "break": case "byte": case "case":
-			case "catch": case "char": case "class": case "const": case "continue": case "default":
-			case "do": case "double": case "else": case "enum": case "extends": case "final":
-			case "finally": case "float": case "for": case "goto": case "if": case "implements":
-			case "import": case "instanceof": case "int": case "interface": case "long":
-			case "native": case "new": case "package": case "private": case "protected":
-			case "public": case "return": case "short": case "static": case "strictfp":
-			case "super": case "switch": case "synchronized": case "this": case "throw":
-			case "throws": case "transient": case "try": case "void": case "volatile":
-			case "while": case "_":
-				return true;
-			default:
-				return false;
-		}
-	}
-
-	/**
-	 * Maps {@code MIDlet-Version} onto an Android version code, keeping the ordering between
-	 * releases of the same suite. Each component is capped so a wild version can't overflow.
-	 */
 	static int deriveVersionCode(String version) {
-		if (version == null) {
-			return 1;
-		}
-		String[] parts = version.trim().split("\\.");
-		int[] values = new int[3];
-		for (int i = 0; i < 3; i++) {
-			if (i >= parts.length) {
-				break;
-			}
-			try {
-				values[i] = Math.max(0, Math.min(999, Integer.parseInt(parts[i].trim())));
-			} catch (NumberFormatException ignored) {
-				// A non-numeric component contributes nothing rather than failing the build.
-			}
-		}
-		int code = values[0] * 1_000_000 + values[1] * 1_000 + values[2];
-		return code == 0 ? 1 : code;
+		return PortNaming.deriveVersionCode(version);
 	}
 
+	/** A short, stable fingerprint, used to notice when packaged settings have changed. */
 	private static String shortDigest(String value) {
 		try {
 			byte[] hash = MessageDigest.getInstance("SHA-1").digest(value.getBytes(StandardCharsets.UTF_8));
