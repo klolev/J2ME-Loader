@@ -90,10 +90,14 @@ final class MidletIcons {
 
 		File anyDpi = new File(resDir, "mipmap-anydpi-v26");
 		Files.createDirectories(anyDpi.toPath());
+		// The monochrome layer is the same artwork: Android tints it by alpha, so the icon
+		// becomes a themed silhouette of the suite's own icon rather than falling back to an
+		// untinted one on a themed launcher. This is how the emulator declares its own icon.
 		String adaptiveIcon = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
 				+ "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
 				+ "    <background android:drawable=\"@color/ic_launcher_background\"/>\n"
 				+ "    <foreground android:drawable=\"@mipmap/ic_launcher_foreground\"/>\n"
+				+ "    <monochrome android:drawable=\"@mipmap/ic_launcher_foreground\"/>\n"
 				+ "</adaptive-icon>\n";
 		Files.write(new File(anyDpi, "ic_launcher.xml").toPath(), adaptiveIcon.getBytes(StandardCharsets.UTF_8));
 

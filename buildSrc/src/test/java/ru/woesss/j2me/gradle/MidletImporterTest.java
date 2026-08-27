@@ -224,7 +224,11 @@ public class MidletImporterTest {
 		// The adaptive foreground is a 108dp canvas at the same density as the 48dp icon.
 		BufferedImage foreground = ImageIO.read(new File(result.resDir, "mipmap-mdpi/ic_launcher_foreground.png"));
 		assertEquals(108, foreground.getWidth());
-		assertTrue(new File(result.resDir, "mipmap-anydpi-v26/ic_launcher.xml").isFile());
+		String adaptive = new String(Files.readAllBytes(
+				new File(result.resDir, "mipmap-anydpi-v26/ic_launcher.xml").toPath()), StandardCharsets.UTF_8);
+		assertTrue(adaptive, adaptive.contains("<foreground android:drawable=\"@mipmap/ic_launcher_foreground\"/>"));
+		// Without a monochrome layer a themed launcher drops back to the untinted icon.
+		assertTrue(adaptive, adaptive.contains("<monochrome android:drawable=\"@mipmap/ic_launcher_foreground\"/>"));
 
 		String colors = new String(Files.readAllBytes(
 				new File(result.resDir, "values/ic_launcher_background.xml").toPath()), StandardCharsets.UTF_8);
