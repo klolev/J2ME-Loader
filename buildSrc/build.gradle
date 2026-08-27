@@ -14,6 +14,9 @@ sourceSets {
         // compiled from ':dexlib' rather than duplicated here.
         java.srcDir new File(rootDir.parentFile, 'dexlib/src/main/java')
         java.include 'ru/woesss/j2me/gradle/**', 'org/microemu/android/asm/**', 'ru/woesss/j2me/apk/**'
+        // Signing belongs to the device, not the build: it is the one class here that needs
+        // apksig, and nothing in this build has anything to say about it.
+        java.exclude 'ru/woesss/j2me/apk/PortSigner.java'
     }
 }
 

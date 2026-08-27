@@ -24,8 +24,6 @@ android {
         versionCode 101
         versionName "1.8.2"
         resValue 'string', 'app_name', rootProject.name
-        // True only for a template, whose suite arrives afterwards in a second dex.
-        buildConfigField 'boolean', 'PORT_TEMPLATE', 'false'
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -101,11 +99,12 @@ android {
                 versionCode 1
                 versionName '0.0.0-template'
                 midletArchivesBaseName = 'midlet-template'
-                buildConfigField 'boolean', 'PORT_TEMPLATE', 'true'
-                // The suite is stamped in as a second dex. Every runtime from Lollipop on
-                // loads those by itself, but Dalvik loads only the first, and the emulator
-                // still supports it - so a template installs the rest at startup.
-                multiDexEnabled true
+                // A port is signed on the device that builds it, and the signing library
+                // needs Android 8.0 at the least. Declaring the floor here rather than
+                // inheriting the emulator's own keeps the port honest about where it
+                // installs, and means the second dex holding the suite is loaded by the
+                // runtime itself rather than by anything this app has to arrange.
+                minSdk 30
                 // A template must serve any suite, and the suite is not present to be shrunk
                 // against, so it keeps the whole MIDP surface rather than what it reaches.
                 proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),

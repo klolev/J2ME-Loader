@@ -52,18 +52,18 @@ import java.util.TimeZone;
  * reused - which also means it can be backed up, or carried to another device.
  *
  * <p>The signing itself is done by {@code apksig}, the same code {@code apksigner} runs, using
- * the v2 scheme alone. Android 7.0 is where v2 arrived and also the earliest release apksig
- * can run on, so the two floors are the same one: below it apksig wants
- * {@code java.util.function}, and its v1 signer wants {@code java.util.Base64}, which Android
- * did not have until 8.0. A port signed here therefore installs on Android 7.0 and up; for
- * anything older, build the port with Gradle instead, which signs with v1 as well.
+ * the v2 scheme alone. v1 exists for Android before 7.0, which is below anything apksig can
+ * run on in the first place - and apksig writes v1 with {@code java.util.Base64}, which
+ * Android only gained in 8.0. So v2 is not a reduced choice here, it is the whole of what
+ * these devices read.
  */
 public final class PortSigner {
 	/**
-	 * The earliest Android this works on - as the device doing the signing, and as the device
-	 * the signed port installs on. See the class comment for why those coincide.
+	 * What a port declares it needs, matching the template it is stamped into. apksig is told
+	 * this rather than left to read it back, so that a template built for something older
+	 * cannot quietly produce a port signed for a floor it does not meet.
 	 */
-	public static final int MIN_SDK = 24;
+	public static final int MIN_SDK = 30;
 
 	private static final String KEY_ALIAS = "port";
 	private static final String KEY_ALGORITHM = "RSA";
@@ -110,8 +110,8 @@ public final class PortSigner {
 					// Nothing here rotates keys, which is what v3 exists for, and its signer
 					// is the part of apksig that reaches furthest past what old Android has.
 					.setV3SigningEnabled(false)
-					// The template says it runs on far older Android than this can sign for,
-					// and without being told, apksig would insist on v1 to cover that.
+					// Below this, apksig would insist on v1 to cover devices the port does
+					// not claim to support anyway.
 					.setMinSdkVersion(MIN_SDK)
 					.build()
 					.sign();

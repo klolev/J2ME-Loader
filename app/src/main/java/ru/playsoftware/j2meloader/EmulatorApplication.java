@@ -59,9 +59,7 @@ public class EmulatorApplication extends Application {
 	@Override
 	protected void attachBaseContext(Context base) {
 		super.attachBaseContext(base);
-		if (BuildConfig.DEBUG || BuildConfig.PORT_TEMPLATE) {
-			// A port built on a device keeps its suite in a second dex, which Dalvik would
-			// otherwise never look at.
+		if (BuildConfig.DEBUG) {
 			MultiDex.install(this);
 		}
 		ContextHolder.setApplication(this);
