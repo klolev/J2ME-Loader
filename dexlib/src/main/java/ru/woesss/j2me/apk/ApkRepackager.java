@@ -171,7 +171,7 @@ public final class ApkRepackager {
 	 * are. Every density gets the same image: it is one small bitmap to begin with, and
 	 * writing it once per density keeps the resource table honest without resizing anything.
 	 */
-	private Map<String, byte[]> replaceIcons(ZipFile zip, byte[] icon) {
+	private Map<String, byte[]> replaceIcons(ZipFile zip, byte[] icon) throws IOException {
 		Map<String, byte[]> replacements = new HashMap<>();
 		for (Enumeration<? extends ZipEntry> e = zip.entries(); e.hasMoreElements(); ) {
 			String name = e.nextElement().getName();
@@ -180,16 +180,24 @@ public final class ApkRepackager {
 			}
 		}
 		if (replacements.isEmpty()) {
-			warnings.add("No launcher icon found in the template, so the port has none of its own");
+			// Silently leaving the emulator's own icon on someone's game would be the worst
+			// outcome: it looks like the export worked. The cause is always the same, so say
+			// so rather than making them work it out from an icon that looks wrong.
+			throw new IOException("No launcher icon found in the template. Its resource files"
+					+ " were renamed, which happens when it is built with resource optimization"
+					+ " on; build it with -Pandroid.enableResourceOptimizations=false.");
 		}
 		return replacements;
 	}
 
 	/**
-	 * Whether an entry is one of the template's launcher bitmaps. A release build renames
-	 * resource files, so the path cannot be relied on - what identifies them is that they
-	 * are the PNGs the manifest's icon resource resolves to, which for the template is every
-	 * mipmap it ships.
+	 * Whether an entry is one of the template's launcher bitmaps.
+	 *
+	 * <p>This goes by path, which only works while the template keeps its resource names.
+	 * A release build normally shortens every one of them to something like {@code res/BW.xml},
+	 * and then nothing about a path says what it holds - hence the flag a template is built
+	 * with. Resolving the manifest's icon reference through {@code resources.arsc} would not
+	 * need that, at the cost of parsing the resource table.
 	 */
 	private static boolean isLauncherIcon(String name) {
 		String lower = name.toLowerCase(Locale.ROOT);

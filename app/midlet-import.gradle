@@ -45,7 +45,10 @@ import ru.woesss.j2me.gradle.MidletImporter
  *
  * A third mode builds a template rather than a finished port:
  *   -PmidletTemplate         an APK with placeholder identity and no suite in it, for the
- *                            on-device repackager to stamp a suite into
+ *                            on-device repackager to stamp a suite into. Build it with
+ *                            -Pandroid.enableResourceOptimizations=false: the repackager
+ *                            finds the icon to replace by its path, and that optimization
+ *                            renames every resource file to something like 'res/BW.png'.
  */
 
 import groovy.json.JsonOutput
