@@ -18,11 +18,12 @@ package ru.woesss.j2me.apk;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -128,7 +129,7 @@ public final class ApkRepackager {
 			if (port.icon != null) {
 				replacements.putAll(replaceIcons(zip, port.icon));
 			}
-			additions.put(nextDexName(zip), Files.readAllBytes(port.dex.toPath()));
+			additions.put(nextDexName(zip), readFile(port.dex));
 			additions.put(MANIFEST_RESOURCE, port.descriptor);
 			if (port.settings != null) {
 				additions.put(CONFIG_RESOURCE, port.settings);
@@ -256,7 +257,7 @@ public final class ApkRepackager {
 	 */
 	private void write(ZipFile zip, File target, Map<String, byte[]> replacements,
 					   Map<String, byte[]> additions) throws IOException {
-		try (CountingStream counter = new CountingStream(Files.newOutputStream(target.toPath()));
+		try (CountingStream counter = new CountingStream(new FileOutputStream(target));
 			 ZipOutputStream out = new ZipOutputStream(counter)) {
 			for (Enumeration<? extends ZipEntry> e = zip.entries(); e.hasMoreElements(); ) {
 				ZipEntry entry = e.nextElement();
@@ -326,6 +327,12 @@ public final class ApkRepackager {
 			throw new IOException("The template has no " + name);
 		}
 		try (InputStream in = zip.getInputStream(entry)) {
+			return readAll(in);
+		}
+	}
+
+	private static byte[] readFile(File file) throws IOException {
+		try (InputStream in = new FileInputStream(file)) {
 			return readAll(in);
 		}
 	}
