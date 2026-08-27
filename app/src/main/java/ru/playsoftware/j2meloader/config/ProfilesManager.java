@@ -22,6 +22,8 @@ import android.util.Log;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,9 +31,12 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 import javax.microedition.lcdui.keyboard.VirtualKeyboard;
 import javax.microedition.util.ContextHolder;
@@ -39,11 +44,14 @@ import javax.microedition.util.ContextHolder;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import ru.playsoftware.j2meloader.util.FileUtils;
+import ru.playsoftware.j2meloader.util.IOUtils;
 import ru.playsoftware.j2meloader.util.XmlUtils;
 
 public class ProfilesManager {
 
 	private static final String TAG = ProfilesManager.class.getName();
+	/** Settings baked into a port when it was packaged; absent from the full emulator. */
+	private static final String PACKAGED_CONFIG = "/MIDLET-META-INF/config.json";
 	private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
 	static ArrayList<Profile> getProfiles() {
@@ -167,6 +175,53 @@ public class ProfilesManager {
 				ProfilesManager.saveConfig(params);
 				break;
 		}
+		return params;
+	}
+
+	/**
+	 * The settings a packaged port was built with, or null if it was built without any.
+	 *
+	 * <p>A port carries one app rather than a list of them, so the settings it should run
+	 * with are known when it is packaged and there is no reason to ask the user for them on
+	 * first launch. What ships is a partial profile - only the values chosen at packaging
+	 * time - laid over the usual defaults, so a port stays on the defaults for everything
+	 * its packager did not care about.
+	 *
+	 * <p>The result is written out like any other profile, so it is an opening position
+	 * rather than a fixture: whatever the user changes afterwards is what loads next time.
+	 */
+	public static ProfileModel loadPackagedConfig(File dir) {
+		byte[] packaged;
+		try (InputStream stream = ProfilesManager.class.getResourceAsStream(PACKAGED_CONFIG)) {
+			if (stream == null) {
+				return null;
+			}
+			packaged = IOUtils.toByteArray(stream);
+		} catch (Exception e) {
+			Log.e(TAG, "loadPackagedConfig: can't read " + PACKAGED_CONFIG, e);
+			return null;
+		}
+		ProfileModel params = new ProfileModel(dir);
+		try {
+			JsonObject merged = gson.toJsonTree(params).getAsJsonObject();
+			JsonObject overrides = JsonParser.parseString(new String(packaged, StandardCharsets.UTF_8))
+					.getAsJsonObject();
+			for (Map.Entry<String, JsonElement> entry : overrides.entrySet()) {
+				merged.add(entry.getKey(), entry.getValue());
+			}
+			params = gson.fromJson(merged, ProfileModel.class);
+			params.dir = dir;
+		} catch (Exception e) {
+			// Fall back to the plain defaults: a malformed packaged profile should cost the
+			// port its chosen settings, not its ability to start.
+			Log.e(TAG, "loadPackagedConfig: malformed " + PACKAGED_CONFIG, e);
+			params = new ProfileModel(dir);
+		}
+		if (!dir.isDirectory() && !dir.mkdirs()) {
+			Log.e(TAG, "loadPackagedConfig: can't create " + dir);
+			return null;
+		}
+		saveConfig(params);
 		return params;
 	}
 

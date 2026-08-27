@@ -22,6 +22,16 @@ Options:
   --package <id>          Application id, instead of one derived from the suite name
   --version-code <n>      Android version code, instead of one derived from MIDlet-Version
   -h, --help              Show this message
+
+Per-app settings, baked in at packaging time instead of being asked for on first
+launch. Give none of these and the app opens its settings screen the first time
+it runs, which is where the settings come from otherwise.
+  --settings <file>       A config.json; the emulator writes one per app under its
+                          'configs' directory, so tune the app there and reuse it
+  --screen <WxH>          The MIDlet's screen size, e.g. 240x320
+  --no-virtual-keyboard   Leave out the on-screen controls
+  --virtual-keyboard      Keep the on-screen controls
+  --no-touch-input        Do not deliver touches to the MIDlet as pointer events
 EOF
 	exit 2
 }
@@ -42,6 +52,16 @@ while [ $# -gt 0 ]; do
 		--version-code)
 			[ $# -ge 2 ] || usage
 			GRADLE_ARGS+=("-PmidletVersionCode=$2"); shift 2 ;;
+		--settings)
+			[ $# -ge 2 ] || usage
+			[ -f "$2" ] || { echo "No such settings file: $2" >&2; exit 1; }
+			GRADLE_ARGS+=("-PmidletSettings=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"); shift 2 ;;
+		--screen)
+			[ $# -ge 2 ] || usage
+			GRADLE_ARGS+=("-PmidletScreen=$2"); shift 2 ;;
+		--no-virtual-keyboard) GRADLE_ARGS+=("-PmidletVirtualKeyboard=false"); shift ;;
+		--virtual-keyboard) GRADLE_ARGS+=("-PmidletVirtualKeyboard=true"); shift ;;
+		--no-touch-input) GRADLE_ARGS+=("-PmidletTouchInput=false"); shift ;;
 		-h|--help) usage ;;
 		-*) echo "Unknown option: $1" >&2; usage ;;
 		*)

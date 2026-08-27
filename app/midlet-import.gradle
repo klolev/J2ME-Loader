@@ -34,7 +34,18 @@ import ru.woesss.j2me.gradle.MidletImporter
  *   -Pmidlet=<path>          the suite's .jar or .jad          (or the MIDLET env variable)
  *   -PmidletPackage=<id>     application id to use instead of the derived one
  *   -PmidletVersionCode=<n>  version code to use instead of the derived one
+ *
+ * Per-app settings can be decided here rather than on first launch:
+ *   -PmidletSettings=<path>  a config.json - the emulator writes one per app under its
+ *                            'configs' directory, so tune the app there and reuse it
+ *   -PmidletScreen=<WxH>     the MIDlet's screen size, e.g. 240x320
+ *   -PmidletVirtualKeyboard=<bool>  show the on-screen controls
+ *   -PmidletTouchInput=<bool>       deliver touches to the MIDlet as pointer events
+ * Give none of these and the port asks on first launch, as it always has.
  */
+
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 
 ext.midletImport = null
 ext.midletExportSigning = null
@@ -45,7 +56,8 @@ if (midletSource) {
 	File source = resolveMidletPath(midletSource.toString())
 	def importer = new MidletImporter(layout.buildDirectory.dir('midlet-import').get().asFile)
 	def versionCodeOverride = findProperty('midletVersionCode')?.toString()?.toInteger()
-	def result = importer.importSuite(source, findProperty('midletPackage')?.toString(), versionCodeOverride)
+	def result = importer.importSuite(source, findProperty('midletPackage')?.toString(),
+			versionCodeOverride, resolvePackagedSettings())
 
 	logger.lifecycle("MIDlet: ${result.appName} ${result.versionName} (${result.summary})")
 	logger.lifecycle("        ${result.applicationId}, versionCode ${result.versionCode}," +
@@ -59,6 +71,64 @@ if (midletSource) {
 	def taskNames = gradle.startParameter.taskNames
 	def debugOnly = !taskNames.isEmpty() && taskNames.every { it.toLowerCase(Locale.ROOT).contains('debug') }
 	ext.midletExportSigning = debugOnly ? null : resolveExportSigning()
+}
+
+/**
+ * The per-app settings to package with the port, as JSON, or null to package none.
+ *
+ * <p>Only the values actually chosen are written: the port lays them over the emulator's
+ * own defaults at first launch, so an unmentioned setting keeps whatever the emulator
+ * would otherwise have used rather than being pinned to a value now.
+ */
+String resolvePackagedSettings() {
+	Map settings = [:]
+	def settingsFile = findProperty('midletSettings')
+	if (settingsFile) {
+		File file = resolveMidletPath(settingsFile.toString())
+		if (!file.isFile()) {
+			throw new GradleException("MIDlet settings file not found: $file")
+		}
+		def parsed
+		try {
+			parsed = new JsonSlurper().parse(file, 'UTF-8')
+		} catch (Exception e) {
+			throw new GradleException("MIDlet settings file is not valid JSON: $file", e)
+		}
+		if (!(parsed instanceof Map)) {
+			throw new GradleException("MIDlet settings file must hold a JSON object: $file")
+		}
+		settings.putAll(parsed)
+	}
+
+	def screen = findProperty('midletScreen')
+	if (screen) {
+		def matcher = (screen.toString().trim() =~ /^(\d+)\s*[xX*]\s*(\d+)$/)
+		if (!matcher.matches()) {
+			throw new GradleException("-PmidletScreen must look like 240x320, got '$screen'")
+		}
+		settings['ScreenWidth'] = matcher[0][1].toInteger()
+		settings['ScreenHeight'] = matcher[0][2].toInteger()
+	}
+	putFlag(settings, 'ShowKeyboard', 'midletVirtualKeyboard')
+	putFlag(settings, 'TouchInput', 'midletTouchInput')
+
+	if (settings.isEmpty()) {
+		return null
+	}
+	logger.lifecycle("        settings: ${settings.keySet().join(', ')}")
+	return JsonOutput.toJson(settings)
+}
+
+void putFlag(Map settings, String key, String property) {
+	def value = findProperty(property)
+	if (value == null) {
+		return
+	}
+	String text = value.toString().trim().toLowerCase(Locale.ROOT)
+	if (!(text in ['true', 'false'])) {
+		throw new GradleException("-P$property must be true or false, got '$value'")
+	}
+	settings[key] = text == 'true'
 }
 
 /**

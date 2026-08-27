@@ -99,6 +99,11 @@ public class MicroLoader {
 	public boolean init() {
 		File config = new File(workDir + Config.MIDLET_CONFIGS_DIR + appDirName);
 		this.params = ProfilesManager.loadConfig(config);
+		if (params == null && !BuildConfig.FULL_EMULATOR) {
+			// A port carries one app, so the settings it runs with can be decided when it is
+			// packaged; if they were, start the MIDlet rather than opening a settings screen.
+			this.params = ProfilesManager.loadPackagedConfig(config);
+		}
 		if (params == null) {
 			return false;
 		}

@@ -81,7 +81,7 @@ public class MidletImporterTest {
 	public void importsClassesResourcesAndDescriptor() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertEquals("Space Game", result.appName);
 		assertEquals("1.2.3", result.versionName);
@@ -109,7 +109,7 @@ public class MidletImporterTest {
 	public void rewritesBytecodeTheSameWayTheEmulatorDoes() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		Map<String, byte[]> packed = readJar(result.classesJar);
 		String rewritten = constantPoolText(packed.get("com/acme/game/Main.class"));
@@ -126,7 +126,7 @@ public class MidletImporterTest {
 		entries.put("Accessors.class", subIntReturnClass());
 		File jar = writeSuiteJar("game.jar", MANIFEST, entries);
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		// A boolean read straight out of a short[] is what Android rejects the class for;
 		// after the rewrite the value goes through a comparison, so what reaches the return
@@ -148,7 +148,7 @@ public class MidletImporterTest {
 		entries.put("META-INF/ACME.RSA", "signature".getBytes(StandardCharsets.UTF_8));
 		File jar = writeSuiteJar("game.jar", MANIFEST, entries);
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		for (String name : readJar(result.classesJar).keySet()) {
 			assertFalse(name, name.startsWith("META-INF/"));
@@ -166,7 +166,7 @@ public class MidletImporterTest {
 				+ "MIDlet-Jar-Size: 1234\r\n"
 				+ "Server-URL: http://example.invalid\r\n").getBytes(StandardCharsets.UTF_8));
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertEquals("2.0.0", result.versionName);
 		assertEquals(2_000_000, result.versionCode);
@@ -186,7 +186,7 @@ public class MidletImporterTest {
 				+ "MIDlet-Jar-URL: game.jar\r\n"
 				+ "MIDlet-Jar-Size: 1234\r\n").getBytes(StandardCharsets.UTF_8));
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jad, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jad, null, null, null);
 
 		assertEquals("Space Game", result.appName);
 		assertTrue(readJar(result.classesJar).containsKey("com/acme/game/Main.class"));
@@ -201,7 +201,7 @@ public class MidletImporterTest {
 				+ "MIDlet-Version: 1.0\r\n").getBytes(StandardCharsets.UTF_8));
 
 		try {
-			new MidletImporter(outputDir).importSuite(jad, null, null);
+			new MidletImporter(outputDir).importSuite(jad, null, null, null);
 			fail("Expected the missing JAR to be reported");
 		} catch (IOException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("orphan.jar"));
@@ -213,7 +213,7 @@ public class MidletImporterTest {
 	public void buildsLauncherIconsFromTheSuiteIcon() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertNotNull("no launcher resources were generated", result.resDir);
 		BufferedImage mdpi = ImageIO.read(new File(result.resDir, "mipmap-mdpi/ic_launcher.png"));
@@ -239,7 +239,7 @@ public class MidletImporterTest {
 		File jar = writeSuiteJar("game.jar", MANIFEST, entries);
 
 		MidletImporter importer = new MidletImporter(outputDir);
-		MidletImport result = importer.importSuite(jar, null, null);
+		MidletImport result = importer.importSuite(jar, null, null, null);
 
 		assertNull(result.resDir);
 		assertTrue(importer.getWarnings().toString(),
@@ -250,7 +250,7 @@ public class MidletImporterTest {
 	public void keepsTheSuiteClassesFromBeingShrunkOrRenamed() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		String rules = new String(Files.readAllBytes(result.proguardFile.toPath()), StandardCharsets.UTF_8);
 		assertTrue(rules, rules.contains("-keep class com.acme.game.Main { *; }"));
@@ -269,12 +269,12 @@ public class MidletImporterTest {
 	public void reusesAnUnchangedImport() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport first = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport first = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 		long stamp = first.classesJar.lastModified();
 		assertTrue(first.classesJar.setLastModified(stamp - 10_000L));
 		long marked = first.classesJar.lastModified();
 
-		new MidletImporter(outputDir).importSuite(jar, null, null);
+		new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertEquals("an unchanged suite should not be repacked", marked, first.classesJar.lastModified());
 	}
@@ -282,23 +282,56 @@ public class MidletImporterTest {
 	@Test
 	public void rebuildsWhenTheSuiteChanges() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
-		MidletImport first = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport first = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 		assertFalse(readJar(first.classesJar).containsKey("res/extra.dat"));
 
 		Map<String, byte[]> entries = defaultEntries();
 		entries.put("res/extra.dat", "more".getBytes(StandardCharsets.UTF_8));
 		writeSuiteJar("game.jar", MANIFEST, entries);
 
-		MidletImport second = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport second = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertTrue(readJar(second.classesJar).containsKey("res/extra.dat"));
+	}
+
+	@Test
+	public void packagesTheSettingsChosenAtExportTime() throws IOException {
+		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
+		String settings = "{\"ScreenWidth\":176,\"ScreenHeight\":208,\"ShowKeyboard\":false}";
+
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, settings);
+
+		assertEquals(settings, new String(
+				readJar(result.classesJar).get(MidletImporter.CONFIG_RESOURCE), StandardCharsets.UTF_8));
+	}
+
+	@Test
+	public void shipsNoSettingsWhenNoneWereChosen() throws IOException {
+		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
+
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
+
+		// Without packaged settings the port asks on first launch, as it always has.
+		assertFalse(readJar(result.classesJar).containsKey(MidletImporter.CONFIG_RESOURCE));
+	}
+
+	@Test
+	public void redoesTheImportWhenTheSettingsChange() throws IOException {
+		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
+		new MidletImporter(outputDir).importSuite(jar, null, null, "{\"ShowKeyboard\":false}");
+
+		MidletImport second = new MidletImporter(outputDir)
+				.importSuite(jar, null, null, "{\"ShowKeyboard\":true}");
+
+		assertEquals("{\"ShowKeyboard\":true}", new String(
+				readJar(second.classesJar).get(MidletImporter.CONFIG_RESOURCE), StandardCharsets.UTF_8));
 	}
 
 	@Test
 	public void honoursExplicitPackageAndVersionCode() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, "org.acme.space", 42);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, "org.acme.space", 42, null);
 
 		assertEquals("org.acme.space", result.applicationId);
 		assertEquals(42, result.versionCode);
@@ -314,7 +347,7 @@ public class MidletImporterTest {
 		}
 
 		try {
-			new MidletImporter(outputDir).importSuite(jar, null, null);
+			new MidletImporter(outputDir).importSuite(jar, null, null, null);
 			fail("Expected a jar without a manifest to be rejected");
 		} catch (IOException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("MANIFEST.MF"));
@@ -354,7 +387,7 @@ public class MidletImporterTest {
 	public void listsTheSuiteFilesThatGetPackagedAsResources() throws IOException {
 		File jar = writeSuiteJar("game.jar", MANIFEST, defaultEntries());
 
-		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null, null);
 
 		assertTrue(result.resourcePaths.toString(), result.resourcePaths.contains("res/level.dat"));
 		assertTrue(result.resourcePaths.toString(), result.resourcePaths.contains("icon.png"));

@@ -50,10 +50,29 @@ fetches it when installing a suite on a device.
 ```
 
 The application id, version, app label and launcher icon all come from the suite descriptor.
+
+### Per-app settings
+
+An exported app opens the emulator's per-app settings screen the first time it runs, which is
+where its screen size and controls get chosen. Those settings can instead be decided when the
+APK is built, and then it starts the game straight away:
+
+```sh
+./export-apk.sh game.jar --screen 240x320 --no-virtual-keyboard
+```
+
+Only the settings named are fixed; everything else keeps the emulator's defaults, and the
+user can still change any of it afterwards. To carry over settings tuned in the emulator
+itself, copy the app's `config.json` from the emulator's `configs` directory and pass it:
+
+```sh
+./export-apk.sh game.jar --settings config.json
+```
+
 Gradle can be driven directly if you would rather not use the script:
 
 ```sh
-./gradlew assembleMidletRelease -Pmidlet=/path/to/game.jar
+./gradlew assembleMidletRelease -Pmidlet=/path/to/game.jar -PmidletScreen=240x320
 ```
 
 The same `midlet` flavor still builds a port from J2ME **sources** placed in `app/src/midlet`

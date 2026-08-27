@@ -59,6 +59,9 @@ public final class MidletImporter {
 	/** Where the merged suite descriptor lives inside the APK; {@code MicroLoader} reads it. */
 	static final String MANIFEST_RESOURCE = "MIDLET-META-INF/MANIFEST.MF";
 
+	/** Where settings chosen at packaging time live; {@code ProfilesManager} reads them. */
+	static final String CONFIG_RESOURCE = "MIDLET-META-INF/config.json";
+
 	/** Declared JAR size in a JAD; used to flag a download that is not what was promised. */
 	private static final String MIDLET_JAR_SIZE = "MIDlet-Jar-Size";
 
@@ -89,9 +92,12 @@ public final class MidletImporter {
 	 * @param source        the suite's JAR or JAD
 	 * @param packageOverride application id to use, or null to derive one from the suite name
 	 * @param versionCodeOverride version code to use, or null to derive one from the suite version
+	 * @param configJson    a JSON object of per-app settings to package with the port, laid
+	 *                      over the emulator's defaults at first launch, or null to ship none
+	 *                      and let the port ask on first launch as it does today
 	 */
-	public MidletImport importSuite(File source, String packageOverride, Integer versionCodeOverride)
-			throws IOException {
+	public MidletImport importSuite(File source, String packageOverride, Integer versionCodeOverride,
+									String configJson) throws IOException {
 		if (!source.isFile()) {
 			throw new IOException("MIDlet not found: " + source);
 		}
@@ -137,14 +143,14 @@ public final class MidletImporter {
 		File classesJar = new File(outputDir, CLASSES_JAR);
 		File resDir = new File(outputDir, RES_DIR);
 		File proguardFile = new File(outputDir, PROGUARD_FILE);
-		String stamp = buildStamp(jar, source, applicationId, versionCode);
+		String stamp = buildStamp(jar, source, applicationId, versionCode, configJson);
 
 		File summaryFile = new File(outputDir, SUMMARY_FILE);
 		if (!isUpToDate(stamp, classesJar, proguardFile)) {
 			Files.createDirectories(outputDir.toPath());
 			deleteRecursively(new File(outputDir, STAMP_FILE));
 			deleteRecursively(resDir);
-			Repacked repacked = repack(jar, descriptor, classesJar);
+			Repacked repacked = repack(jar, descriptor, classesJar, configJson);
 			writeProguardRules(proguardFile, repacked);
 			if (!writeIcon(jar, descriptor, resDir)) {
 				deleteRecursively(resDir);
@@ -302,7 +308,8 @@ public final class MidletImporter {
 		int unreadableClasses;
 	}
 
-	private Repacked repack(File jar, MidletDescriptor descriptor, File target) throws IOException {
+	private Repacked repack(File jar, MidletDescriptor descriptor, File target, String configJson)
+			throws IOException {
 		Repacked result = new Repacked();
 		Set<String> written = new HashSet<>();
 		Files.createDirectories(target.getAbsoluteFile().getParentFile().toPath());
@@ -348,6 +355,9 @@ public final class MidletImporter {
 				writeEntry(out, entryName, data);
 			}
 			writeEntry(out, MANIFEST_RESOURCE, descriptor.toManifestText().getBytes(StandardCharsets.UTF_8));
+			if (configJson != null) {
+				writeEntry(out, CONFIG_RESOURCE, configJson.getBytes(StandardCharsets.UTF_8));
+			}
 		}
 		if (result.classNames.isEmpty()) {
 			throw new IOException("No classes found in " + jar.getName() + " — not a MIDlet suite?");
@@ -719,7 +729,8 @@ public final class MidletImporter {
 
 	// --- incremental support -----------------------------------------------------------
 
-	private String buildStamp(File jar, File source, String applicationId, int versionCode) {
+	private String buildStamp(File jar, File source, String applicationId, int versionCode,
+							  String configJson) {
 		return "format=" + FORMAT_VERSION
 				+ "\nsource=" + source.getAbsolutePath()
 				+ "\njar=" + jar.getAbsolutePath()
@@ -728,6 +739,7 @@ public final class MidletImporter {
 				+ "\nsourceMtime=" + source.lastModified()
 				+ "\napplicationId=" + applicationId
 				+ "\nversionCode=" + versionCode
+				+ "\nconfig=" + (configJson == null ? "" : shortDigest(configJson))
 				+ "\n";
 	}
 
