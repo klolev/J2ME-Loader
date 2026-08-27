@@ -107,6 +107,34 @@ public final class ApkRepackager {
 
 		/** The suite icon, as a PNG, or null to keep the emulator's own. */
 		public byte[] icon;
+
+		/**
+		 * Which native ABIs to keep, or null for all of them.
+		 *
+		 * <p>A template carries every ABI so that it can serve any device, but most of that
+		 * is dead weight in a port: Android runs one and ignores the rest. Narrowing this to
+		 * what the device supports is worth several megabytes. Leave it null when the port is
+		 * meant to be handed to someone else, whose device may not be this one.
+		 */
+		public String[] abis;
+	}
+
+	/** Whether an entry is a native library for an ABI outside {@code abis}. */
+	private static boolean isExcludedAbi(String name, String[] abis) {
+		if (abis == null || !name.startsWith("lib/")) {
+			return false;
+		}
+		int slash = name.indexOf('/', 4);
+		if (slash == -1) {
+			return false;
+		}
+		String abi = name.substring(4, slash);
+		for (String kept : abis) {
+			if (abi.equals(kept)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -137,7 +165,7 @@ public final class ApkRepackager {
 			if (port.suiteJar != null) {
 				addSuiteFiles(port.suiteJar, additions, zip);
 			}
-			write(zip, target, replacements, additions);
+			write(zip, target, replacements, additions, port.abis);
 		}
 		return target;
 	}
@@ -256,7 +284,7 @@ public final class ApkRepackager {
 	 * an odd offset, would stop it being usable where it lies.
 	 */
 	private void write(ZipFile zip, File target, Map<String, byte[]> replacements,
-					   Map<String, byte[]> additions) throws IOException {
+					   Map<String, byte[]> additions, String[] abis) throws IOException {
 		try (CountingStream counter = new CountingStream(new FileOutputStream(target));
 			 ZipOutputStream out = new ZipOutputStream(counter)) {
 			for (Enumeration<? extends ZipEntry> e = zip.entries(); e.hasMoreElements(); ) {
@@ -264,6 +292,9 @@ public final class ApkRepackager {
 				String name = entry.getName();
 				if (entry.isDirectory() || isSignature(name)) {
 					// The template's signature does not survive its contents changing.
+					continue;
+				}
+				if (isExcludedAbi(name, abis)) {
 					continue;
 				}
 				byte[] replacement = replacements.get(name);

@@ -100,6 +100,9 @@ public class PortBuilder {
 		if (icon.isFile()) {
 			port.icon = FileUtils.getBytes(icon);
 		}
+		// The template carries every ABI so it can serve any device; this port runs on this
+		// device, and the rest is several megabytes Android would never look at.
+		port.abis = Build.SUPPORTED_ABIS;
 
 		File workDir = new File(context.getCacheDir(), "ports");
 		if (!workDir.isDirectory() && !workDir.mkdirs()) {
