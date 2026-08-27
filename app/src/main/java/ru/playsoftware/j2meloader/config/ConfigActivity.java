@@ -64,6 +64,7 @@ import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
 import androidx.core.widget.TextViewCompat;
 
+import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.base.BaseActivity;
 import ru.playsoftware.j2meloader.databinding.ActivityConfigBinding;
@@ -316,6 +317,11 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		if (params == null && defProfile != null) {
 			FileUtils.copyFiles(new File(Config.getProfilesDir(), defProfile), configDir, null);
 			params = ProfilesManager.loadConfig(configDir);
+		}
+		if (params == null && !BuildConfig.FULL_EMULATOR) {
+			// A port may have been packaged with its settings. Whichever screen opens first
+			// has to see them - this one, or the one that runs the app.
+			params = ProfilesManager.loadPackagedConfig(configDir);
 		}
 		if (params == null) {
 			params = new ProfileModel(configDir);

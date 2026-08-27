@@ -40,6 +40,7 @@ import ru.playsoftware.j2meloader.config.ProfilesActivity;
 import ru.playsoftware.j2meloader.util.FileUtils;
 import ru.playsoftware.j2meloader.util.PickDirResultContract;
 
+import static ru.playsoftware.j2meloader.util.Constants.ACTION_EDIT;
 import static ru.playsoftware.j2meloader.util.Constants.KEY_MIDLET_NAME;
 import static ru.playsoftware.j2meloader.util.Constants.PREF_ADD_CUTOUT_AREA;
 import static ru.playsoftware.j2meloader.util.Constants.PREF_EMULATOR_DIR;
@@ -66,7 +67,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 			Preference appSettings = findPreference(PREF_MIDLET_SETTINGS);
 			appSettings.setVisible(true);
 			// A plain path, not a file: URI - ConfigActivity reads the data string as one.
-			appSettings.setIntent(new Intent(Intent.ACTION_EDIT,
+			// ACTION_EDIT here is the app's own action, not the framework's: ConfigActivity
+			// only fills in its screen for an action it recognises.
+			appSettings.setIntent(new Intent(ACTION_EDIT,
 					Uri.parse(Config.getPortAppDir().getPath()),
 					requireActivity(), ConfigActivity.class)
 					.putExtra(KEY_MIDLET_NAME, getString(R.string.app_name)));
