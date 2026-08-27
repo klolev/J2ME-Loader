@@ -20,6 +20,8 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -33,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -115,6 +118,27 @@ public class MidletImporterTest {
 		assertTrue(rewritten, rewritten.contains("javax/microedition/shell/MidletSystem"));
 		assertTrue(rewritten, rewritten.contains("javax/microedition/shell/custom/Timer"));
 		assertFalse(rewritten, rewritten.contains("java/util/Timer"));
+	}
+
+	@Test
+	public void makesSubIntReturnsSurviveAndroidsVerifier() throws IOException {
+		Map<String, byte[]> entries = defaultEntries();
+		entries.put("Accessors.class", subIntReturnClass());
+		File jar = writeSuiteJar("game.jar", MANIFEST, entries);
+
+		MidletImport result = new MidletImporter(outputDir).importSuite(jar, null, null);
+
+		// A boolean read straight out of a short[] is what Android rejects the class for;
+		// after the rewrite the value goes through a comparison, so what reaches the return
+		// is a plain 0 or 1 rather than a short.
+		byte[] rewritten = readJar(result.classesJar).get("Accessors.class");
+		assertNotNull(rewritten);
+		assertEquals("[ICONST_0, SALOAD, IFEQ, ICONST_1, IRETURN, ICONST_0, IRETURN]",
+				opcodesOf(rewritten, "flag", "()Z").toString());
+		// The narrowing types do have a conversion that says exactly what they are.
+		assertEquals("[ICONST_0, SALOAD, I2B, IRETURN]", opcodesOf(rewritten, "small", "()B").toString());
+		// An int return was always fine and must not grow instructions it does not need.
+		assertEquals("[ICONST_0, SALOAD, IRETURN]", opcodesOf(rewritten, "count", "()I").toString());
 	}
 
 	@Test
@@ -446,6 +470,66 @@ public class MidletImporterTest {
 		cw.visitEnd();
 		return cw.toByteArray();
 	}
+
+	/**
+	 * A class in the shape old MIDlet compilers produced: a value read from a {@code short[]}
+	 * handed straight back from methods declared to return narrower types.
+	 */
+	private static byte[] subIntReturnClass() {
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		cw.visit(Opcodes.V1_2, Opcodes.ACC_PUBLIC, "Accessors", null, "java/lang/Object", null);
+		cw.visitField(Opcodes.ACC_PRIVATE, "s", "[S", null, null).visitEnd();
+		for (String[] method : new String[][]{{"flag", "()Z"}, {"small", "()B"}, {"count", "()I"}}) {
+			MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, method[0], method[1], null, null);
+			mv.visitCode();
+			mv.visitVarInsn(Opcodes.ALOAD, 0);
+			mv.visitFieldInsn(Opcodes.GETFIELD, "Accessors", "s", "[S");
+			mv.visitInsn(Opcodes.ICONST_0);
+			mv.visitInsn(Opcodes.SALOAD);
+			mv.visitInsn(Opcodes.IRETURN);
+			mv.visitMaxs(0, 0);
+			mv.visitEnd();
+		}
+		cw.visitEnd();
+		return cw.toByteArray();
+	}
+
+	/** The opcodes of one method, from the array load onwards, named for readability. */
+	private static List<String> opcodesOf(byte[] classData, String method, String descriptor) {
+		List<String> opcodes = new ArrayList<>();
+		new ClassReader(classData).accept(new ClassVisitor(Opcodes.ASM9) {
+			@Override
+			public MethodVisitor visitMethod(int access, String name, String desc,
+											 String signature, String[] exceptions) {
+				if (!name.equals(method) || !desc.equals(descriptor)) {
+					return null;
+				}
+				return new MethodVisitor(Opcodes.ASM9) {
+					@Override
+					public void visitInsn(int opcode) {
+						opcodes.add(OPCODE_NAMES.get(opcode));
+					}
+
+					@Override
+					public void visitJumpInsn(int opcode, org.objectweb.asm.Label label) {
+						opcodes.add(OPCODE_NAMES.get(opcode));
+					}
+				};
+			}
+		}, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+		return opcodes;
+	}
+
+	private static final Map<Integer, String> OPCODE_NAMES = new HashMap<Integer, String>() {{
+		put(Opcodes.SALOAD, "SALOAD");
+		put(Opcodes.IFEQ, "IFEQ");
+		put(Opcodes.ICONST_0, "ICONST_0");
+		put(Opcodes.ICONST_1, "ICONST_1");
+		put(Opcodes.IRETURN, "IRETURN");
+		put(Opcodes.I2B, "I2B");
+		put(Opcodes.I2C, "I2C");
+		put(Opcodes.I2S, "I2S");
+	}};
 
 	/** A 16x16 opaque icon, the size and shape a MIDlet suite usually ships. */
 	private static byte[] iconPng() throws IOException {

@@ -32,6 +32,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 
 public class AndroidClassVisitor extends ClassVisitor {
 
@@ -42,7 +43,8 @@ public class AndroidClassVisitor extends ClassVisitor {
 	@Override
 	public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
 		desc = desc.replace("java/util/Timer", "javax/microedition/shell/custom/Timer");
-		return new AndroidMethodVisitor(super.visitMethod(access, name, desc, signature, exceptions));
+		return new AndroidMethodVisitor(super.visitMethod(access, name, desc, signature, exceptions),
+				Type.getReturnType(desc).getSort());
 	}
 
 	@Override

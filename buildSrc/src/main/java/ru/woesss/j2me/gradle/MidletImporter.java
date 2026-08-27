@@ -63,7 +63,7 @@ public final class MidletImporter {
 	private static final String MIDLET_JAR_SIZE = "MIDlet-Jar-Size";
 
 	/** Bump when the output layout changes, so stale imports are redone. */
-	private static final int FORMAT_VERSION = 2;
+	private static final int FORMAT_VERSION = 3;
 
 	private static final String STAMP_FILE = "import.stamp";
 	private static final String SUMMARY_FILE = "import.summary";

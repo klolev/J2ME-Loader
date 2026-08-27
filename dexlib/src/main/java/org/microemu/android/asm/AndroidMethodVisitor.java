@@ -32,15 +32,58 @@ import static org.objectweb.asm.Opcodes.*;
 
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 
 import java.util.ArrayList;
 
 public class AndroidMethodVisitor extends MethodVisitor {
 	static boolean USE_PANIC_LOGGING = false;
 	private final ArrayList<Label> exceptionHandlers = new ArrayList<>();
+	private final int returnSort;
 
-	public AndroidMethodVisitor(MethodVisitor methodVisitor) {
+	public AndroidMethodVisitor(MethodVisitor methodVisitor, int returnSort) {
 		super(ASM9, methodVisitor);
+		this.returnSort = returnSort;
+	}
+
+	/**
+	 * Makes the returned value carry the type the method promises.
+	 *
+	 * <p>On the JVM every sub-int type shares the integer stack slot, so a MIDlet compiled
+	 * a quarter of a century ago may hand {@code ireturn} a short read straight out of a
+	 * {@code short[]} from a method declared to return boolean. Android's verifier is
+	 * stricter than the one those compilers were written against and rejects the whole
+	 * class for it, which surfaces as a VerifyError the moment the MIDlet starts.
+	 *
+	 * <p>Booleans are normalised through a comparison rather than a narrowing conversion:
+	 * {@code i2b} would turn a value like 256 into false, whereas anything non-zero is true.
+	 */
+	@Override
+	public void visitInsn(int opcode) {
+		if (opcode == IRETURN) {
+			switch (returnSort) {
+				case Type.BOOLEAN:
+					Label zero = new Label();
+					mv.visitJumpInsn(IFEQ, zero);
+					mv.visitInsn(ICONST_1);
+					mv.visitInsn(IRETURN);
+					mv.visitLabel(zero);
+					mv.visitInsn(ICONST_0);
+					break;
+				case Type.BYTE:
+					mv.visitInsn(I2B);
+					break;
+				case Type.CHAR:
+					mv.visitInsn(I2C);
+					break;
+				case Type.SHORT:
+					mv.visitInsn(I2S);
+					break;
+				default:
+					break;
+			}
+		}
+		mv.visitInsn(opcode);
 	}
 
 	@Override
